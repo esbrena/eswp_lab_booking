@@ -9,6 +9,26 @@ if (!defined('ABSPATH')) {
 final class Util {
 	public const ROLE_BOOKING_USER = 'CIE_Usuarios';
 
+	/**
+	 * Lowercase helper (mbstring optional).
+	 */
+	public static function lc(string $value): string {
+		if (function_exists('mb_strtolower')) {
+			return (string) mb_strtolower($value);
+		}
+		return strtolower($value);
+	}
+
+	/**
+	 * PHP 7.4-compatible str_contains().
+	 */
+	public static function contains(string $haystack, string $needle): bool {
+		if ($needle === '') {
+			return true;
+		}
+		return strpos($haystack, $needle) !== false;
+	}
+
 	public static function current_user_can_book(): bool {
 		if (!is_user_logged_in()) {
 			return false;

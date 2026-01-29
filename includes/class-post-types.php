@@ -153,17 +153,17 @@ final class Post_Types {
 	}
 
 	private static function infer_equipment_group(string $title): string {
-		$t = mb_strtolower($title);
-		if (str_contains($t, 'eye') || str_contains($t, 'tobii') || str_contains($t, 'tracker')) {
+		$t = Util::lc($title);
+		if (Util::contains($t, 'eye') || Util::contains($t, 'tobii') || Util::contains($t, 'tracker')) {
 			return 'eye-tracker';
 		}
-		if (str_contains($t, 'eeg')) {
+		if (Util::contains($t, 'eeg')) {
 			return 'eeg';
 		}
-		if (str_contains($t, 'uti') || str_contains($t, 'nasal') || str_contains($t, 'egg') || str_contains($t, 'fon')) {
+		if (Util::contains($t, 'uti') || Util::contains($t, 'nasal') || Util::contains($t, 'egg') || Util::contains($t, 'fon')) {
 			return 'phonetics';
 		}
-		if (str_contains($t, 'mic') || str_contains($t, 'grab') || str_contains($t, 'audio') || str_contains($t, 'interfaz')) {
+		if (Util::contains($t, 'mic') || Util::contains($t, 'grab') || Util::contains($t, 'audio') || Util::contains($t, 'interfaz')) {
 			return 'recording';
 		}
 

@@ -9,3 +9,17 @@
   opacity: 0.75;
 }
 
+.cie-lab-booking__errors {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+.cie-lab-booking__calendar td,
+.cie-lab-booking__calendar th {
+  width: 32px;
+  height: 28px;
+}
+
