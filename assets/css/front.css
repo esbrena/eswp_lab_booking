@@ -1,0 +1,11 @@
+.cie-lab-booking {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.cie-lab-booking--placeholder {
+  opacity: 0.75;
+}
+
