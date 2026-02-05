@@ -11,6 +11,7 @@ require_once __DIR__ . '/class-post-types.php';
 require_once __DIR__ . '/class-assets.php';
 require_once __DIR__ . '/class-mailer.php';
 require_once __DIR__ . '/class-bookings.php';
+require_once __DIR__ . '/class-ajax.php';
 require_once __DIR__ . '/class-shortcodes.php';
 require_once __DIR__ . '/class-admin.php';
 
@@ -18,6 +19,7 @@ final class Bootstrap {
 	public static function init(): void {
 		Post_Types::init();
 		Assets::init();
+		Ajax::init();
 		Shortcodes::init();
 		Admin::init();
 	}

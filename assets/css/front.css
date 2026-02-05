@@ -17,9 +17,117 @@
   margin: 12px 0;
 }
 
+.cie-lab-booking__hint {
+  margin: 0 0 8px 0;
+  color: #334155;
+}
+
+.cie-lab-booking__notice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.cie-lab-booking__notice.is-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.cie-lab-booking__notice.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.cie-lab-booking__notice.is-info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.cie-is-disabled {
+  opacity: 0.55;
+}
+
+.cie-is-disabled input {
+  cursor: not-allowed;
+}
+
 .cie-lab-booking__calendar td,
 .cie-lab-booking__calendar th {
   width: 32px;
   height: 28px;
+}
+
+.cie-calendar-day {
+  cursor: pointer;
+  position: relative;
+}
+
+.cie-cal-tooltip {
+  z-index: 99999;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  font-size: 13px;
+}
+
+.cie-cal-tooltip__date {
+  margin-bottom: 6px;
+}
+
+.cie-cal-tooltip__line {
+  color: #334155;
+}
+
+.cie-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+}
+
+.cie-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.cie-modal__panel {
+  position: relative;
+  margin: 8vh auto;
+  width: min(720px, calc(100% - 32px));
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  padding: 18px 16px;
+}
+
+.cie-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cie-cal-list {
+  margin: 8px 0 0 18px;
+}
+
+.cie-cal-muted {
+  color: #475569;
+  font-size: 13px;
 }
 

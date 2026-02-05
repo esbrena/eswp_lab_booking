@@ -13,3 +13,70 @@
   border: 1px solid rgba(0,0,0,0.15);
 }
 
+.cie-calendar-day {
+  cursor: pointer;
+}
+
+.cie-cal-tooltip {
+  z-index: 99999;
+  min-width: 220px;
+  max-width: 380px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  font-size: 13px;
+}
+
+.cie-cal-tooltip__date {
+  margin-bottom: 6px;
+}
+
+.cie-cal-tooltip__line {
+  color: #334155;
+}
+
+.cie-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+}
+
+.cie-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.cie-modal__panel {
+  position: relative;
+  margin: 8vh auto;
+  width: min(820px, calc(100% - 32px));
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  padding: 18px 16px;
+}
+
+.cie-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cie-cal-list {
+  margin: 8px 0 0 18px;
+}
+
+.cie-cal-muted {
+  color: #475569;
+  font-size: 13px;
+}
+

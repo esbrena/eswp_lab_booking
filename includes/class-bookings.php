@@ -493,5 +493,126 @@ final class Bookings {
 
 		return $map;
 	}
+
+	/**
+	 * Per-resource availability map for a date range.
+	 *
+	 * @param array<int> $space_ids
+	 * @param array<int> $equipment_ids
+	 * @return array{blocked:bool,spaces:array<int,bool>,equipment:array<int,bool>}
+	 */
+	public static function get_resources_availability(string $start, string $end, array $space_ids, array $equipment_ids): array {
+		$space_ids = array_values(array_unique(array_filter(array_map('intval', $space_ids))));
+		$equipment_ids = array_values(array_unique(array_filter(array_map('intval', $equipment_ids))));
+
+		$reserved_space = [];
+		$reserved_equipment = [];
+		$approved = self::get_overlapping_approved_bookings($start, $end);
+		foreach ($approved as $booking) {
+			foreach ((array) get_post_meta($booking->ID, '_cie_booking_spaces', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid) {
+					$reserved_space[$rid] = true;
+				}
+			}
+			foreach ((array) get_post_meta($booking->ID, '_cie_booking_equipment', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid) {
+					$reserved_equipment[$rid] = true;
+				}
+			}
+		}
+
+		$blocks = self::get_overlapping_blocks($start, $end);
+		$blocked_all = false;
+		$blocked_resources = [];
+		foreach ($blocks as $block) {
+			$ids = (array) get_post_meta($block->ID, '_cie_block_resource_ids', true);
+			$ids = array_values(array_filter(array_map('intval', $ids)));
+			if (!$ids) {
+				$blocked_all = true;
+				break;
+			}
+			foreach ($ids as $rid) {
+				$blocked_resources[$rid] = true;
+			}
+		}
+
+		$space_map = [];
+		foreach ($space_ids as $id) {
+			$is_blocked = $blocked_all || isset($blocked_resources[$id]);
+			$space_map[$id] = !$is_blocked && !isset($reserved_space[$id]);
+		}
+
+		$equipment_map = [];
+		foreach ($equipment_ids as $id) {
+			$is_blocked = $blocked_all || isset($blocked_resources[$id]);
+			$equipment_map[$id] = !$is_blocked && !isset($reserved_equipment[$id]);
+		}
+
+		// If there are any blocks and they intersect relevant resources, consider the range blocked.
+		$any_blocked = false;
+		if ($blocks) {
+			if ($blocked_all) {
+				$any_blocked = true;
+			} else {
+				foreach (array_merge($space_ids, $equipment_ids) as $rid) {
+					if (isset($blocked_resources[(int) $rid])) {
+						$any_blocked = true;
+						break;
+					}
+				}
+			}
+		}
+
+		return [
+			'blocked' => $any_blocked,
+			'spaces' => $space_map,
+			'equipment' => $equipment_map,
+		];
+	}
+
+	/**
+	 * Bookings shown in calendar detail popups.
+	 *
+	 * Non-admin viewers only see approved bookings.
+	 * Admin viewers see all non-cancelled bookings.
+	 *
+	 * @return array<int,\WP_Post>
+	 */
+	public static function get_overlapping_bookings_for_calendar(string $start_date, string $end_date, bool $include_all_statuses = false): array {
+		if (!$include_all_statuses) {
+			return self::get_overlapping_approved_bookings($start_date, $end_date);
+		}
+
+		$posts = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'meta_query' => [
+				[
+					'key' => '_cie_booking_start_date',
+					'value' => $end_date,
+					'compare' => '<=',
+					'type' => 'DATE',
+				],
+				[
+					'key' => '_cie_booking_end_date',
+					'value' => $start_date,
+					'compare' => '>=',
+					'type' => 'DATE',
+				],
+				[
+					'key' => '_cie_booking_status',
+					'value' => Post_Types::BOOKING_STATUS_CANCELLED,
+					'compare' => '!=',
+				],
+			],
+		]);
+
+		return is_array($posts) ? $posts : [];
+	}
 }
 
