@@ -10,16 +10,25 @@ final class Shortcodes {
 	public static function init(): void {
 		add_shortcode('cie_booking_form', [self::class, 'render_booking_form']);
 		add_shortcode('cie_my_bookings', [self::class, 'render_my_bookings']);
+		add_shortcode('cie_my_bookings_current', [self::class, 'render_my_bookings_current']);
+		add_shortcode('cie_my_bookings_history', [self::class, 'render_my_bookings_history']);
 		add_shortcode('cie_booking_calendar', [self::class, 'render_calendar']);
 	}
 
-	public static function render_booking_form(): string {
+	public static function render_booking_form($atts = []): string {
 		if (!is_user_logged_in()) {
 			return '<p>' . esc_html__('Debes iniciar sesión para realizar una reserva.', 'cie-lab-booking') . '</p>';
 		}
 		if (!Util::current_user_can_book()) {
 			return '<p>' . esc_html__('Tu usuario no tiene permisos para realizar reservas.', 'cie-lab-booking') . '</p>';
 		}
+
+		$atts = shortcode_atts(
+			[
+				'my_bookings_url' => '',
+			],
+			is_array($atts) ? $atts : []
+		);
 
 		$errors = [];
 		$success = '';
@@ -100,7 +109,28 @@ final class Shortcodes {
 			<?php endif; ?>
 
 			<?php if ($success): ?>
-				<p><strong><?php echo esc_html($success); ?></strong></p>
+				<div class="cie-lab-booking__success">
+					<div class="cie-lab-booking__success-title"><?php echo esc_html__('Reserva enviada', 'cie-lab-booking'); ?></div>
+					<p><?php echo esc_html($success); ?></p>
+					<div class="cie-lab-booking__success-actions">
+						<?php
+						$another_url = remove_query_arg(['booking_id'], (string) get_permalink());
+						$my_url = trim((string) ($atts['my_bookings_url'] ?? ''));
+						?>
+						<a class="cie-btn cie-btn--primary" href="<?php echo esc_url($another_url); ?>">
+							<?php echo esc_html__('Hacer otra reserva', 'cie-lab-booking'); ?>
+						</a>
+						<?php if ($my_url !== ''): ?>
+							<a class="cie-btn" href="<?php echo esc_url($my_url); ?>">
+								<?php echo esc_html__('Volver a mis reservas', 'cie-lab-booking'); ?>
+							</a>
+						<?php endif; ?>
+					</div>
+				</div>
+				<?php
+				// Hide form after successful submission.
+				return (string) ob_get_clean();
+				?>
 			<?php endif; ?>
 
 			<?php if ($errors): ?>
@@ -231,6 +261,7 @@ final class Shortcodes {
 	}
 
 	public static function render_my_bookings(): string {
+		// Backwards compatible combined view.
 		if (!is_user_logged_in()) {
 			return '<p>' . esc_html__('Debes iniciar sesión para ver tus reservas.', 'cie-lab-booking') . '</p>';
 		}
@@ -253,8 +284,8 @@ final class Shortcodes {
 		$current = [];
 		$history = [];
 		foreach ($bookings as $b) {
-			$end = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
-			if ($end !== '' && $end >= $today) {
+			[$bucket] = self::bucket_booking($b, $today);
+			if ($bucket === 'current') {
 				$current[] = $b;
 			} else {
 				$history[] = $b;
@@ -267,10 +298,100 @@ final class Shortcodes {
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
 
 			<h4><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></h4>
-			<?php echo self::render_booking_list($current); ?>
+				<?php echo self::render_booking_list($current); ?>
 
 			<h4><?php echo esc_html__('Histórico de reservas', 'cie-lab-booking'); ?></h4>
-			<?php echo self::render_booking_list($history); ?>
+				<?php echo self::render_booking_list($history); ?>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	public static function render_my_bookings_current($atts = []): string {
+		if (!is_user_logged_in()) {
+			return '<p>' . esc_html__('Debes iniciar sesión para ver tus reservas.', 'cie-lab-booking') . '</p>';
+		}
+		if (!Util::current_user_can_book()) {
+			return '<p>' . esc_html__('Tu usuario no tiene permisos para ver reservas.', 'cie-lab-booking') . '</p>';
+		}
+
+		$atts = shortcode_atts(
+			[
+				'title' => __('Reservas en curso', 'cie-lab-booking'),
+				'form_url' => '',
+			],
+			is_array($atts) ? $atts : []
+		);
+
+		$user_id = get_current_user_id();
+		$today = gmdate('Y-m-d');
+		$bookings = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'author' => $user_id,
+		]);
+
+		$current = [];
+		foreach ($bookings as $b) {
+			[$bucket] = self::bucket_booking($b, $today);
+			if ($bucket === 'current') {
+				$current[] = $b;
+			}
+		}
+
+		ob_start();
+		?>
+		<div class="cie-lab-booking">
+			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
+			<?php echo self::render_booking_list($current, (string) $atts['form_url']); ?>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	public static function render_my_bookings_history($atts = []): string {
+		if (!is_user_logged_in()) {
+			return '<p>' . esc_html__('Debes iniciar sesión para ver tus reservas.', 'cie-lab-booking') . '</p>';
+		}
+		if (!Util::current_user_can_book()) {
+			return '<p>' . esc_html__('Tu usuario no tiene permisos para ver reservas.', 'cie-lab-booking') . '</p>';
+		}
+
+		$atts = shortcode_atts(
+			[
+				'title' => __('Histórico de reservas', 'cie-lab-booking'),
+				'form_url' => '',
+			],
+			is_array($atts) ? $atts : []
+		);
+
+		$user_id = get_current_user_id();
+		$today = gmdate('Y-m-d');
+		$bookings = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'author' => $user_id,
+		]);
+
+		$history = [];
+		foreach ($bookings as $b) {
+			[$bucket] = self::bucket_booking($b, $today);
+			if ($bucket === 'history') {
+				$history[] = $b;
+			}
+		}
+
+		ob_start();
+		?>
+		<div class="cie-lab-booking">
+			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
+			<?php echo self::render_booking_list($history, (string) $atts['form_url']); ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -306,14 +427,14 @@ final class Shortcodes {
 	/**
 	 * @param array<int,\WP_Post> $bookings
 	 */
-	private static function render_booking_list(array $bookings): string {
+	private static function render_booking_list(array $bookings, string $form_url = ''): string {
 		if (!$bookings) {
 			return '<p><em>' . esc_html__('No hay reservas.', 'cie-lab-booking') . '</em></p>';
 		}
 
 		ob_start();
 		?>
-		<table>
+		<table class="cie-table">
 			<thead>
 				<tr>
 					<th><?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></th>
@@ -330,7 +451,9 @@ final class Shortcodes {
 				$admin_message = (string) get_post_meta($b->ID, '_cie_booking_admin_message', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
-				$edit_url = add_query_arg(['booking_id' => (int) $b->ID], (string) get_permalink());
+				$base = $form_url !== '' ? $form_url : (string) get_permalink();
+				$edit_url = add_query_arg(['booking_id' => (int) $b->ID], $base);
+				$status_slug = self::status_slug($status);
 				?>
 				<tr>
 					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
@@ -338,7 +461,9 @@ final class Shortcodes {
 						<?php echo esc_html(self::resources_summary($spaces, $equipment)); ?>
 					</td>
 					<td>
-						<?php echo esc_html(self::status_label($status)); ?>
+						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr($status_slug); ?>">
+							<?php echo esc_html(self::status_label($status)); ?>
+						</span>
 						<?php if ($status === Post_Types::BOOKING_STATUS_CHANGES): ?>
 							<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
 							<?php if ($admin_message): ?>
@@ -363,6 +488,37 @@ final class Shortcodes {
 			Post_Types::BOOKING_STATUS_CANCELLED => __('Anulada', 'cie-lab-booking'),
 		];
 		return $map[$status] ?? $status;
+	}
+
+	private static function status_slug(string $status): string {
+		$map = [
+			Post_Types::BOOKING_STATUS_PENDING => 'pending',
+			Post_Types::BOOKING_STATUS_APPROVED => 'approved',
+			Post_Types::BOOKING_STATUS_REJECTED => 'rejected',
+			Post_Types::BOOKING_STATUS_CHANGES => 'changes',
+			Post_Types::BOOKING_STATUS_CANCELLED => 'cancelled',
+		];
+		return $map[$status] ?? 'unknown';
+	}
+
+	/**
+	 * @return array{0:'current'|'history',1:string} bucket + status
+	 */
+	private static function bucket_booking(\WP_Post $booking, string $today): array {
+		$status = (string) get_post_meta($booking->ID, '_cie_booking_status', true);
+		$end = (string) get_post_meta($booking->ID, '_cie_booking_end_date', true);
+
+		// Cancelled and rejected always go to history.
+		if (in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true)) {
+			return ['history', $status];
+		}
+
+		// Ongoing/upcoming for non-cancelled/non-rejected.
+		if ($end !== '' && $end >= $today) {
+			return ['current', $status];
+		}
+
+		return ['history', $status];
 	}
 
 	private static function resources_summary(array $space_ids, array $equipment_ids): string {

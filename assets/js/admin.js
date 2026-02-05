@@ -1,10 +1,17 @@
 (function ($) {
   $(function () {
     var $dates = $('input.cie-date');
-    if ($dates.length && $dates.datepicker) {
-      $dates.datepicker({
-        dateFormat: 'yy-mm-dd',
-        numberOfMonths: 2,
+    if ($dates.length && window.flatpickr) {
+      var fpLocale = (window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : null;
+      $dates.each(function () {
+        window.flatpickr(this, {
+          dateFormat: 'Y-m-d',
+          locale: fpLocale || 'default',
+          disableMobile: true,
+          altInput: true,
+          altFormat: 'd/m/Y',
+          allowInput: true,
+        });
       });
     }
 

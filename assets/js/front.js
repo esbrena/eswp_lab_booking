@@ -5,26 +5,38 @@
     var $start = $root.find('input.cie-date[name="start_date"]');
     var $end = $root.find('input.cie-date[name="end_date"]');
 
-    function setup($el, onSelect) {
-      if (!$el.length || !$el.datepicker) return;
-      $el.datepicker({
-        dateFormat: 'yy-mm-dd',
-        numberOfMonths: 3,
-        onSelect: onSelect,
-      });
+    function setupFlatpickr($el, opts) {
+      if (!$el.length || !window.flatpickr) return null;
+      return window.flatpickr($el.get(0), opts);
     }
 
-    setup($start, function (dateText) {
-      if ($end.length) {
-        $end.datepicker('option', 'minDate', dateText);
-      }
-      updateFlow();
+    // Flatpickr locale.
+    var fpLocale = (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : null;
+
+    var startFp = setupFlatpickr($start, {
+      dateFormat: 'Y-m-d',
+      locale: fpLocale || 'default',
+      disableMobile: true,
+      altInput: true,
+      altFormat: 'd/m/Y',
+      onChange: function (selectedDates, dateStr) {
+        if (endFp && dateStr) endFp.set('minDate', dateStr);
+        updateFlow();
+      },
+      showMonths: 3,
     });
-    setup($end, function (dateText) {
-      if ($start.length) {
-        $start.datepicker('option', 'maxDate', dateText);
-      }
-      updateFlow();
+
+    var endFp = setupFlatpickr($end, {
+      dateFormat: 'Y-m-d',
+      locale: fpLocale || 'default',
+      disableMobile: true,
+      altInput: true,
+      altFormat: 'd/m/Y',
+      onChange: function (selectedDates, dateStr) {
+        if (startFp && dateStr) startFp.set('maxDate', dateStr);
+        updateFlow();
+      },
+      showMonths: 3,
     });
 
     function showNotice(key, message, type) {
