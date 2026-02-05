@@ -61,9 +61,30 @@
       var blocks = data.blocks || [];
       var html = '<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div>';
       if (blocks.length) {
-        html += '<div class="cie-cal-tooltip__line">Mantenimiento: ' + blocks.length + '</div>';
+        var blockResources = [];
+        blocks.forEach(function (b) {
+          if (b.isGlobal) blockResources.push('Global');
+          if (b.resources && b.resources.length) blockResources = blockResources.concat(b.resources);
+        });
+        html += '<div class="cie-cal-tooltip__line"><strong>Mantenimiento</strong>: ' + (blockResources.length ? blockResources.slice(0, 3).join(', ') : blocks.length) + (blockResources.length > 3 ? '…' : '') + '</div>';
       }
-      html += '<div class="cie-cal-tooltip__line">Reservas: ' + bookings.length + '</div>';
+      if (bookings.length) {
+        var res = [];
+        bookings.forEach(function (b) {
+          if (b.spaces && b.spaces.length) res = res.concat(b.spaces);
+          if (b.equipment && b.equipment.length) res = res.concat(b.equipment);
+        });
+        var uniq = {};
+        res = res.filter(function (x) {
+          if (!x) return false;
+          if (uniq[x]) return false;
+          uniq[x] = true;
+          return true;
+        });
+        html += '<div class="cie-cal-tooltip__line"><strong>Reservado</strong>: ' + (res.length ? res.slice(0, 3).join(', ') : bookings.length) + (res.length > 3 ? '…' : '') + '</div>';
+      } else {
+        html += '<div class="cie-cal-tooltip__line">Sin reservas</div>';
+      }
       $t.html(html);
     }
 
@@ -104,7 +125,17 @@
       if (blocks.length) {
         html += '<h3>Mantenimiento</h3><ul>';
         blocks.forEach(function (b) {
-          html += '<li>' + (b.start_date || '') + ' - ' + (b.end_date || '') + (b.reason ? ' · ' + b.reason : '') + '</li>';
+          var r = [];
+          if (b.isGlobal) r.push('Global');
+          if (b.resources && b.resources.length) r = r.concat(b.resources);
+          html +=
+            '<li>' +
+            (b.start_date || '') +
+            ' - ' +
+            (b.end_date || '') +
+            (r.length ? ' · ' + r.join(', ') : '') +
+            (b.reason ? ' · ' + b.reason : '') +
+            '</li>';
         });
         html += '</ul>';
       }

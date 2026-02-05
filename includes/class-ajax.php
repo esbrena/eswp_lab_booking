@@ -139,10 +139,26 @@ final class Ajax {
 
 		$block_items = [];
 		foreach ($blocks as $block) {
+			$blocked_ids = (array) get_post_meta((int) $block->ID, '_cie_block_resource_ids', true);
+			$blocked_ids = array_values(array_filter(array_map('intval', $blocked_ids)));
+			$is_global = empty($blocked_ids);
+
+			$resources = [];
+			// Show resource names when viewer is admin or booking user.
+			if (!$is_global && ($is_admin || $can_book)) {
+				foreach ($blocked_ids as $rid) {
+					$p = get_post((int) $rid);
+					if ($p && $p->post_type === Post_Types::CPT_RESOURCE) {
+						$resources[] = $p->post_title;
+					}
+				}
+			}
+
 			$block_items[] = [
-				'id' => (int) $block->ID,
 				'start_date' => (string) get_post_meta((int) $block->ID, '_cie_block_start_date', true),
 				'end_date' => (string) get_post_meta((int) $block->ID, '_cie_block_end_date', true),
+				'isGlobal' => $is_global,
+				'resources' => $resources,
 				'reason' => $is_admin ? (string) get_post_meta((int) $block->ID, '_cie_block_reason', true) : '',
 			];
 		}

@@ -117,8 +117,9 @@ final class Admin {
 			$month = gmdate('Y-m');
 		}
 
+		// Admin calendar: show 3 months (same as front), starting from selected month.
 		$start = $month . '-01';
-		$end = gmdate('Y-m-t', strtotime($start));
+		$end = gmdate('Y-m-d', strtotime('+3 months -1 day', strtotime($start)));
 		$day_map = Bookings::build_day_map($start, $end);
 
 		$pending = get_posts([
@@ -166,8 +167,8 @@ final class Admin {
 		self::legend_item('#ef4444', __('No disponible (mantenimiento)', 'cie-lab-booking'));
 		echo '</div>';
 
-		// Calendar for month.
-		echo self::render_calendar_month($start, $day_map);
+		// Calendar for 3 months (like front).
+		echo self::render_calendar_months($start, 3, $day_map);
 
 		// Pending list.
 		echo '<h2>' . esc_html__('Reservas pendientes de validar', 'cie-lab-booking') . '</h2>';
@@ -801,6 +802,20 @@ final class Admin {
 		</table>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * @param array<string, array{has_space:bool,has_equipment:bool,blocked:bool}> $day_map
+	 */
+	private static function render_calendar_months(string $month_start_ymd, int $months, array $day_map): string {
+		$start_ts = strtotime($month_start_ymd . ' 00:00:00');
+		$out = '';
+		for ($i = 0; $i < $months; $i++) {
+			$m_ts = strtotime('+' . $i . ' months', $start_ts);
+			$out .= self::render_calendar_month(gmdate('Y-m-01', $m_ts), $day_map);
+			$out .= '<div style="height:10px"></div>';
+		}
+		return $out;
 	}
 }
 

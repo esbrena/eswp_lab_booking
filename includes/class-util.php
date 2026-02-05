@@ -7,7 +7,31 @@ if (!defined('ABSPATH')) {
 }
 
 final class Util {
-	public const ROLE_BOOKING_USER = 'CIE_Usuarios';
+	/**
+	 * Roles allowed to create bookings.
+	 *
+	 * Note: WP stores role "slugs" in $user->roles, not display names. We keep a
+	 * tolerant allow/deny list because sites may register these roles with
+	 * different slugs/casing.
+	 */
+	public const ROLE_ALLOW_BOOKING = [
+		// Common slugs/casing for "CIE Usuario".
+		'CIE_Usuario',
+		'cie_usuario',
+		'CIE_Usuarios', // legacy in this plugin
+		'cie_usuarios',
+	];
+
+	/**
+	 * Roles explicitly blocked from creating bookings.
+	 */
+	public const ROLE_DENY_BOOKING = [
+		// "CIE Nuevo Usuario" should NOT be able to book.
+		'CIE_Nuevo_Usuario',
+		'cie_nuevo_usuario',
+		'CIE_NuevoUsuario',
+		'cie_nuevoUsuario',
+	];
 
 	/**
 	 * Lowercase helper (mbstring optional).
@@ -44,7 +68,22 @@ final class Util {
 			return true;
 		}
 
-		return in_array(self::ROLE_BOOKING_USER, (array) $user->roles, true);
+		$roles = (array) $user->roles;
+
+		// Explicit deny list wins.
+		foreach (self::ROLE_DENY_BOOKING as $deny) {
+			if (in_array($deny, $roles, true)) {
+				return false;
+			}
+		}
+
+		foreach (self::ROLE_ALLOW_BOOKING as $allow) {
+			if (in_array($allow, $roles, true)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function require_booking_user(): void {
