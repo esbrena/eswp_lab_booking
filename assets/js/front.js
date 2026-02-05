@@ -176,6 +176,15 @@
       availabilityTimer = window.setTimeout(function () {
         requestAvailability(start, end, function (data) {
           var removed = applyAvailability(data);
+          if (data && data.blocked) {
+            showNotice(
+              'dates',
+              'En las fechas seleccionadas hay días no disponibles por mantenimiento. Seleccione otras fechas de reserva.',
+              'error'
+            );
+          } else {
+            showNotice('dates', '', 'info');
+          }
 
           // Step 3 messaging.
           if (useSpace) {
@@ -222,7 +231,14 @@
           // Step 5 visibility logic.
           var step3Ok = !useSpace || anyChecked('spaces[]');
           var step4Ok = !useEq || anyChecked('equipment[]');
-          var canProceed = (useSpace || useEq) && step3Ok && step4Ok && !(useSpace && allDisabled('spaces[]')) && !(useEq && allDisabled('equipment[]'));
+          var isBlocked = !!(data && data.blocked);
+          var canProceed =
+            (useSpace || useEq) &&
+            step3Ok &&
+            step4Ok &&
+            !isBlocked &&
+            !(useSpace && allDisabled('spaces[]')) &&
+            !(useEq && allDisabled('equipment[]'));
 
           toggleStep(5, canProceed);
 

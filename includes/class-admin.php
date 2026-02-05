@@ -529,7 +529,7 @@ final class Admin {
 			echo '<p><em>' . esc_html__('No hay equipos configurados.', 'cie-lab-booking') . '</em></p>';
 		} else {
 			foreach ($equipment_grouped as $group => $items) {
-				echo '<details style="margin:6px 0;"><summary>' . esc_html($group) . '</summary>';
+				echo '<details style="margin:6px 0;"><summary>' . esc_html(self::equipment_group_label((string) $group)) . '</summary>';
 				foreach ($items as $eq) {
 					$checked = in_array((string) $eq->ID, array_map('strval', (array) $equipment), true);
 					printf(
@@ -710,6 +710,17 @@ final class Admin {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	private static function equipment_group_label(string $group): string {
+		$map = [
+			'recording' => __('Equipos de grabación', 'cie-lab-booking'),
+			'phonetics' => __('Equipos de análisis fonético', 'cie-lab-booking'),
+			'eye-tracker' => __('Equipos de eye-tracker', 'cie-lab-booking'),
+			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
+			'other' => __('Otros', 'cie-lab-booking'),
+		];
+		return $map[$group] ?? $group;
 	}
 
 	private static function status_label(string $status): string {
