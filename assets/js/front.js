@@ -486,6 +486,43 @@
         openModal(date, data);
       });
     });
+
+    // Tabs for [cie_my_bookings]
+    function initTabs($container) {
+      var $tabsRoot = $container.find('[data-cie-tabs]');
+      if (!$tabsRoot.length) return;
+
+      $tabsRoot.each(function () {
+        var $r = $(this);
+        var $tabs = $r.find('[data-cie-tab]');
+        var $panels = $r.find('[data-cie-panel]');
+        var $select = $r.find('.cie-tabs__select');
+
+        function setActive(key) {
+          $tabs.each(function () {
+            var on = $(this).data('cie-tab') === key;
+            $(this).toggleClass('is-active', on).attr('aria-selected', on ? 'true' : 'false');
+          });
+          $panels.each(function () {
+            var on = $(this).data('cie-panel') === key;
+            $(this).toggle(!!on);
+          });
+          if ($select.length) $select.val(key);
+        }
+
+        $tabs.on('click', function () {
+          setActive($(this).data('cie-tab'));
+        });
+        $select.on('change', function () {
+          setActive($(this).val());
+        });
+
+        // Init.
+        setActive('current');
+      });
+    }
+
+    initTabs($root);
   });
 })(jQuery);
 

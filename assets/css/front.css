@@ -109,6 +109,82 @@
   color: #334155;
 }
 
+.cie-tabs {
+  margin-top: 10px;
+}
+
+.cie-tabs__bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.cie-tabs__tab {
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.cie-tabs__tab.is-active {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+
+.cie-tabs__select {
+  margin-left: auto;
+  display: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff;
+}
+
+.cie-tabs__panel {
+  padding-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .cie-tabs__tab {
+    display: none;
+  }
+  .cie-tabs__select {
+    display: block;
+  }
+}
+
+.cie-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 14px 12px;
+  max-width: 420px;
+}
+
+.cie-card__title {
+  color: #334155;
+  font-weight: 700;
+}
+
+.cie-card__value {
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 800;
+  margin-top: 8px;
+  color: #0f172a;
+}
+
+.cie-card__actions {
+  margin-top: 12px;
+}
+
 .cie-lab-booking__hint {
   margin: 0 0 8px 0;
   color: #334155;

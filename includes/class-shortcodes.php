@@ -12,6 +12,7 @@ final class Shortcodes {
 		add_shortcode('cie_my_bookings', [self::class, 'render_my_bookings']);
 		add_shortcode('cie_my_bookings_current', [self::class, 'render_my_bookings_current']);
 		add_shortcode('cie_my_bookings_history', [self::class, 'render_my_bookings_history']);
+		add_shortcode('cie_my_active_bookings_card', [self::class, 'render_my_active_bookings_card']);
 		add_shortcode('cie_booking_calendar', [self::class, 'render_calendar']);
 	}
 
@@ -297,11 +298,66 @@ final class Shortcodes {
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
 
-			<h4><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></h4>
-				<?php echo self::render_booking_list($current); ?>
+			<div class="cie-tabs" data-cie-tabs>
+				<div class="cie-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
+					<button type="button" class="cie-tabs__tab is-active" role="tab" aria-selected="true" data-cie-tab="current">
+						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>
+					</button>
+					<button type="button" class="cie-tabs__tab" role="tab" aria-selected="false" data-cie-tab="history">
+						<?php echo esc_html__('Histórico', 'cie-lab-booking'); ?>
+					</button>
 
-			<h4><?php echo esc_html__('Histórico de reservas', 'cie-lab-booking'); ?></h4>
-				<?php echo self::render_booking_list($history); ?>
+					<select class="cie-tabs__select" aria-label="<?php echo esc_attr__('Seleccionar sección', 'cie-lab-booking'); ?>">
+						<option value="current"><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></option>
+						<option value="history"><?php echo esc_html__('Histórico', 'cie-lab-booking'); ?></option>
+					</select>
+				</div>
+
+				<div class="cie-tabs__panel" role="tabpanel" data-cie-panel="current">
+					<?php echo self::render_booking_list($current); ?>
+				</div>
+				<div class="cie-tabs__panel" role="tabpanel" data-cie-panel="history" style="display:none">
+					<?php echo self::render_booking_list($history); ?>
+				</div>
+			</div>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	public static function render_my_active_bookings_card($atts = []): string {
+		if (!is_user_logged_in()) {
+			return '';
+		}
+		if (!Util::current_user_can_book()) {
+			return '';
+		}
+
+		$atts = shortcode_atts(
+			[
+				'title' => __('Reservas activas', 'cie-lab-booking'),
+				'link_url' => '',
+				'link_label' => __('Ver mis reservas', 'cie-lab-booking'),
+			],
+			is_array($atts) ? $atts : []
+		);
+
+		$user_id = get_current_user_id();
+		$today = gmdate('Y-m-d');
+		$count = self::count_active_bookings($user_id, $today);
+
+		ob_start();
+		?>
+		<div class="cie-card">
+			<div class="cie-card__title"><?php echo esc_html((string) $atts['title']); ?></div>
+			<div class="cie-card__value"><?php echo (int) $count; ?></div>
+			<?php if (trim((string) $atts['link_url']) !== ''): ?>
+				<div class="cie-card__actions">
+					<a class="cie-btn" href="<?php echo esc_url((string) $atts['link_url']); ?>">
+						<?php echo esc_html((string) $atts['link_label']); ?>
+					</a>
+				</div>
+			<?php endif; ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -519,6 +575,31 @@ final class Shortcodes {
 		}
 
 		return ['history', $status];
+	}
+
+	private static function count_active_bookings(int $user_id, string $today): int {
+		$ids = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'fields' => 'ids',
+			'author' => $user_id,
+			'meta_query' => [
+				[
+					'key' => '_cie_booking_end_date',
+					'value' => $today,
+					'compare' => '>=',
+					'type' => 'DATE',
+				],
+				[
+					'key' => '_cie_booking_status',
+					'value' => [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED],
+					'compare' => 'NOT IN',
+				],
+			],
+		]);
+
+		return is_array($ids) ? count($ids) : 0;
 	}
 
 	private static function resources_summary(array $space_ids, array $equipment_ids): string {
