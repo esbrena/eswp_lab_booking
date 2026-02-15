@@ -109,11 +109,16 @@
   color: #334155;
 }
 
-.cie-tabs {
+.cie-native-tabs {
   margin-top: 10px;
 }
 
-.cie-tabs__bar {
+.cie-native-tabs__radio {
+  position: absolute;
+  left: -9999px;
+}
+
+.cie-native-tabs__bar {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -121,41 +126,80 @@
   padding-bottom: 8px;
 }
 
-.cie-tabs__tab {
+.cie-native-tabs__tab {
   border: 1px solid rgba(15, 23, 42, 0.2);
   background: #fff;
   color: #0f172a;
   border-radius: 999px;
   padding: 8px 12px;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 13px;
+  user-select: none;
 }
 
-.cie-tabs__tab.is-active {
+.cie-native-tabs__panel {
+  padding-top: 10px;
+}
+
+/* CSS-only selection state */
+.cie-native-tabs__panel--current,
+.cie-native-tabs__panel--history {
+  display: none;
+}
+
+/* When current checked */
+.cie-native-tabs__radio:first-of-type:checked ~ .cie-native-tabs__bar label[for$="-current"] {
   background: #0ea5e9;
   border-color: #0284c7;
   color: #fff;
 }
-
-.cie-tabs__select {
-  margin-left: auto;
-  display: none;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.2);
-  background: #fff;
+.cie-native-tabs__radio:first-of-type:checked ~ .cie-native-tabs__panel--current {
+  display: block;
 }
 
-.cie-tabs__panel {
-  padding-top: 10px;
+/* When history checked */
+.cie-native-tabs__radio:nth-of-type(2):checked ~ .cie-native-tabs__bar label[for$="-history"] {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+.cie-native-tabs__radio:nth-of-type(2):checked ~ .cie-native-tabs__panel--history {
+  display: block;
+}
+
+.cie-native-accordion {
+  display: none;
+  margin-top: 10px;
+}
+
+.cie-native-accordion details {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.cie-native-accordion summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 12px;
+  list-style: none;
+}
+
+.cie-native-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.cie-native-accordion__panel {
+  padding: 0 12px 12px 12px;
 }
 
 @media (max-width: 640px) {
-  .cie-tabs__tab {
+  .cie-native-tabs {
     display: none;
   }
-  .cie-tabs__select {
+  .cie-native-accordion {
     display: block;
   }
 }
@@ -234,6 +278,35 @@
 .cie-calendar-day {
   cursor: pointer;
   position: relative;
+}
+
+.cie-lab-booking__calendar {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+.cie-lab-booking__calendar caption {
+  font-size: 20px;
+  font-weight: 900;
+  padding: 8px 0 10px;
+  color: #0f172a;
+}
+
+.cie-lab-booking__calendar th {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 800;
+}
+
+.cie-lab-booking__calendar td {
+  border-radius: 8px;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.cie-lab-booking__calendar td.cie-calendar-day:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
 }
 
 .cie-cal-tooltip {

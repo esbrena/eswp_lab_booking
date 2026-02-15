@@ -755,7 +755,7 @@ final class Admin {
 		ob_start();
 		?>
 		<table class="widefat striped" style="max-width:820px;">
-			<caption style="text-align:left;font-weight:bold;padding:8px 0;"><?php echo esc_html($month_label); ?></caption>
+			<caption style="text-align:left;font-weight:900;font-size:20px;padding:10px 0;"><?php echo esc_html($month_label); ?></caption>
 			<thead>
 				<tr>
 					<th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th>
@@ -782,7 +782,7 @@ final class Admin {
 							$bg = '#3b82f6';
 						}
 						?>
-						<td class="cie-calendar-day" data-cie-date="<?php echo esc_attr($ymd); ?>" style="background:<?php echo esc_attr($bg); ?>;text-align:center;"><?php echo (int) $day; ?></td>
+						<td class="cie-calendar-day" data-cie-date="<?php echo esc_attr($ymd); ?>" style="cursor:pointer;background:<?php echo esc_attr($bg); ?>;text-align:center;"><?php echo (int) $day; ?></td>
 						<?php
 						if ($weekday === 7 && $day !== $days_in_month) {
 							echo '</tr><tr>';

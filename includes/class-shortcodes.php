@@ -294,31 +294,47 @@ final class Shortcodes {
 		}
 
 		ob_start();
+		$uid = 'cie-tabs-' . wp_generate_uuid4();
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
 
-			<div class="cie-tabs" data-cie-tabs>
-				<div class="cie-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
-					<button type="button" class="cie-tabs__tab is-active" role="tab" aria-selected="true" data-cie-tab="current">
-						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>
-					</button>
-					<button type="button" class="cie-tabs__tab" role="tab" aria-selected="false" data-cie-tab="history">
-						<?php echo esc_html__('Histórico', 'cie-lab-booking'); ?>
-					</button>
+			<!-- Desktop: CSS-only native tabs (radio + label) -->
+			<div class="cie-native-tabs">
+				<input class="cie-native-tabs__radio" type="radio" name="<?php echo esc_attr($uid); ?>" id="<?php echo esc_attr($uid . '-current'); ?>" checked>
+				<input class="cie-native-tabs__radio" type="radio" name="<?php echo esc_attr($uid); ?>" id="<?php echo esc_attr($uid . '-history'); ?>">
 
-					<select class="cie-tabs__select" aria-label="<?php echo esc_attr__('Seleccionar sección', 'cie-lab-booking'); ?>">
-						<option value="current"><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></option>
-						<option value="history"><?php echo esc_html__('Histórico', 'cie-lab-booking'); ?></option>
-					</select>
+				<div class="cie-native-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
+					<label class="cie-native-tabs__tab" for="<?php echo esc_attr($uid . '-current'); ?>" role="tab">
+						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>
+					</label>
+					<label class="cie-native-tabs__tab" for="<?php echo esc_attr($uid . '-history'); ?>" role="tab">
+						<?php echo esc_html__('Histórico', 'cie-lab-booking'); ?>
+					</label>
 				</div>
 
-				<div class="cie-tabs__panel" role="tabpanel" data-cie-panel="current">
+				<div class="cie-native-tabs__panel cie-native-tabs__panel--current" role="tabpanel">
 					<?php echo self::render_booking_list($current); ?>
 				</div>
-				<div class="cie-tabs__panel" role="tabpanel" data-cie-panel="history" style="display:none">
+				<div class="cie-native-tabs__panel cie-native-tabs__panel--history" role="tabpanel">
 					<?php echo self::render_booking_list($history); ?>
 				</div>
+			</div>
+
+			<!-- Mobile: native dropdown/accordion (details) -->
+			<div class="cie-native-accordion">
+				<details open>
+					<summary><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></summary>
+					<div class="cie-native-accordion__panel">
+						<?php echo self::render_booking_list($current); ?>
+					</div>
+				</details>
+				<details>
+					<summary><?php echo esc_html__('Histórico', 'cie-lab-booking'); ?></summary>
+					<div class="cie-native-accordion__panel">
+						<?php echo self::render_booking_list($history); ?>
+					</div>
+				</details>
 			</div>
 		</div>
 		<?php
@@ -638,7 +654,7 @@ final class Shortcodes {
 		ob_start();
 		?>
 		<table class="cie-lab-booking__calendar" style="margin-bottom:16px;">
-			<caption style="text-align:left;font-weight:bold;"><?php echo esc_html($month_label); ?></caption>
+			<caption style="text-align:left;"><?php echo esc_html($month_label); ?></caption>
 			<thead>
 				<tr>
 					<th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th>
@@ -665,7 +681,7 @@ final class Shortcodes {
 							$bg = '#3b82f6'; // blue
 						}
 						?>
-						<td class="cie-calendar-day" data-cie-date="<?php echo esc_attr($ymd); ?>" style="background:<?php echo esc_attr($bg); ?>;color:#111;text-align:center;">
+						<td class="cie-calendar-day" data-cie-date="<?php echo esc_attr($ymd); ?>" style="cursor:pointer;background:<?php echo esc_attr($bg); ?>;color:#111;text-align:center;">
 							<?php echo (int) $day; ?>
 						</td>
 						<?php

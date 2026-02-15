@@ -459,7 +459,8 @@
       $m.show();
     }
 
-    $root.on('mouseenter', '.cie-calendar-day[data-cie-date]', function (e) {
+    // Use document-level delegation to work with any page builder DOM injection.
+    $(document).on('mouseenter', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function (e) {
       var date = $(this).data('cie-date');
       if (!date) return;
       var $t = ensureTooltip();
@@ -470,59 +471,22 @@
       });
     });
 
-    $root.on('mousemove', '.cie-calendar-day[data-cie-date]', function (e) {
+    $(document).on('mousemove', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function (e) {
       if (!tooltip || !tooltip.is(':visible')) return;
       tooltip.css({ left: e.pageX + 12, top: e.pageY + 12 });
     });
 
-    $root.on('mouseleave', '.cie-calendar-day[data-cie-date]', function () {
+    $(document).on('mouseleave', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
       if (tooltip) tooltip.hide();
     });
 
-    $root.on('click', '.cie-calendar-day[data-cie-date]', function () {
+    $(document).on('click', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
       var date = $(this).data('cie-date');
       if (!date) return;
       fetchDayDetails(date, function (data) {
         openModal(date, data);
       });
     });
-
-    // Tabs for [cie_my_bookings]
-    function initTabs($container) {
-      var $tabsRoot = $container.find('[data-cie-tabs]');
-      if (!$tabsRoot.length) return;
-
-      $tabsRoot.each(function () {
-        var $r = $(this);
-        var $tabs = $r.find('[data-cie-tab]');
-        var $panels = $r.find('[data-cie-panel]');
-        var $select = $r.find('.cie-tabs__select');
-
-        function setActive(key) {
-          $tabs.each(function () {
-            var on = $(this).data('cie-tab') === key;
-            $(this).toggleClass('is-active', on).attr('aria-selected', on ? 'true' : 'false');
-          });
-          $panels.each(function () {
-            var on = $(this).data('cie-panel') === key;
-            $(this).toggle(!!on);
-          });
-          if ($select.length) $select.val(key);
-        }
-
-        $tabs.on('click', function () {
-          setActive($(this).data('cie-tab'));
-        });
-        $select.on('change', function () {
-          setActive($(this).val());
-        });
-
-        // Init.
-        setActive('current');
-      });
-    }
-
-    initTabs($root);
   });
 })(jQuery);
 
