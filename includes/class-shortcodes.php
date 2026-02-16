@@ -294,47 +294,79 @@ final class Shortcodes {
 		}
 
 		ob_start();
-		$uid = 'cie-tabs-' . wp_generate_uuid4();
+		$uid = 'cie-my-bookings-' . wp_generate_uuid4();
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
 
-			<!-- Desktop: CSS-only native tabs (radio + label) -->
-			<div class="cie-native-tabs">
-				<input class="cie-native-tabs__radio" type="radio" name="<?php echo esc_attr($uid); ?>" id="<?php echo esc_attr($uid . '-current'); ?>" checked>
-				<input class="cie-native-tabs__radio" type="radio" name="<?php echo esc_attr($uid); ?>" id="<?php echo esc_attr($uid . '-history'); ?>">
+			<div id="<?php echo esc_attr($uid); ?>" class="cie-inline-tabs" data-cie-inline-tabs>
+				<style>
+					/* Inline tabs CSS (scoped to this shortcode instance) */
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__bar{display:flex;gap:8px;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{border:1px solid rgba(15,23,42,.2);background:#fff;color:#0f172a;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:800;font-size:13px;user-select:none}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab.is-active{background:#0ea5e9;border-color:#0284c7;color:#fff}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{margin-left:auto;display:none;padding:8px 10px;border-radius:10px;border:1px solid rgba(15,23,42,.2);background:#fff}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel{display:none}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel.is-active{display:block}
+					@media (max-width:640px){
+						#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{display:none}
+						#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{display:block}
+					}
+				</style>
 
-				<div class="cie-native-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
-					<label class="cie-native-tabs__tab" for="<?php echo esc_attr($uid . '-current'); ?>" role="tab">
+				<div class="cie-inline-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
+					<button type="button" class="cie-inline-tabs__tab is-active" role="tab" aria-selected="true" data-tab="current">
 						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>
-					</label>
-					<label class="cie-native-tabs__tab" for="<?php echo esc_attr($uid . '-history'); ?>" role="tab">
+					</button>
+					<button type="button" class="cie-inline-tabs__tab" role="tab" aria-selected="false" data-tab="history">
 						<?php echo esc_html__('Histórico', 'cie-lab-booking'); ?>
-					</label>
+					</button>
+					<select class="cie-inline-tabs__select" aria-label="<?php echo esc_attr__('Seleccionar sección', 'cie-lab-booking'); ?>">
+						<option value="current"><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></option>
+						<option value="history"><?php echo esc_html__('Histórico', 'cie-lab-booking'); ?></option>
+					</select>
 				</div>
 
-				<div class="cie-native-tabs__panel cie-native-tabs__panel--current" role="tabpanel">
+				<div class="cie-inline-tabs__panel is-active" role="tabpanel" data-panel="current">
 					<?php echo self::render_booking_list($current); ?>
 				</div>
-				<div class="cie-native-tabs__panel cie-native-tabs__panel--history" role="tabpanel">
+				<div class="cie-inline-tabs__panel" role="tabpanel" data-panel="history">
 					<?php echo self::render_booking_list($history); ?>
 				</div>
-			</div>
 
-			<!-- Mobile: native dropdown/accordion (details) -->
-			<div class="cie-native-accordion">
-				<details open>
-					<summary><?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?></summary>
-					<div class="cie-native-accordion__panel">
-						<?php echo self::render_booking_list($current); ?>
-					</div>
-				</details>
-				<details>
-					<summary><?php echo esc_html__('Histórico', 'cie-lab-booking'); ?></summary>
-					<div class="cie-native-accordion__panel">
-						<?php echo self::render_booking_list($history); ?>
-					</div>
-				</details>
+				<script>
+					(function(){
+						var root = document.getElementById(<?php echo wp_json_encode($uid); ?>);
+						if(!root) return;
+						var tabs = root.querySelectorAll('[data-tab]');
+						var panels = root.querySelectorAll('[data-panel]');
+						var select = root.querySelector('.cie-inline-tabs__select');
+
+						function setActive(key){
+							tabs.forEach(function(btn){
+								var on = btn.getAttribute('data-tab') === key;
+								btn.classList.toggle('is-active', on);
+								btn.setAttribute('aria-selected', on ? 'true' : 'false');
+							});
+							panels.forEach(function(p){
+								var on = p.getAttribute('data-panel') === key;
+								p.classList.toggle('is-active', on);
+							});
+							if(select) select.value = key;
+						}
+
+						tabs.forEach(function(btn){
+							btn.addEventListener('click', function(){
+								setActive(btn.getAttribute('data-tab') || 'current');
+							});
+						});
+						if(select){
+							select.addEventListener('change', function(){
+								setActive(select.value || 'current');
+							});
+						}
+					})();
+				</script>
 			</div>
 		</div>
 		<?php
