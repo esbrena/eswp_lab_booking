@@ -16,10 +16,7 @@ final class Util {
 	 */
 	public const ROLE_ALLOW_BOOKING = [
 		// Common slugs/casing for "CIE Usuario".
-		'CIE_Usuario',
-		'cie_usuario',
-		'CIE_Usuarios', // legacy in this plugin
-		'cie_usuarios',
+		'cie_user',
 	];
 
 	/**
@@ -27,10 +24,7 @@ final class Util {
 	 */
 	public const ROLE_DENY_BOOKING = [
 		// "CIE Nuevo Usuario" should NOT be able to book.
-		'CIE_Nuevo_Usuario',
-		'cie_nuevo_usuario',
-		'CIE_NuevoUsuario',
-		'cie_nuevoUsuario',
+		'cie_new_user',
 	];
 
 	/**
