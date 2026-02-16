@@ -7,15 +7,27 @@ if (!defined('ABSPATH')) {
 }
 
 final class Mailer {
+	public const OPTION_NOTIFICATION_EMAIL = 'cie_lab_booking_notification_email';
+
 	/**
-	 * Hosting no envía mails actualmente.
+	 * Notification destination for admin alerts.
 	 *
-	 * TODO: Sustituir esto por los administradores reales (o una opción del plugin)
-	 * cuando el hosting tenga el envío de correo configurado.
+	 * Defaults to the site's admin email. Can be overridden in plugin settings.
 	 */
-	public const ADMIN_FALLBACK_EMAIL = 'esther.g.brena@gmail.com';
+	public static function get_notification_email(): string {
+		$opt = trim((string) get_option(self::OPTION_NOTIFICATION_EMAIL, ''));
+		if ($opt !== '' && is_email($opt)) {
+			return $opt;
+		}
+		$admin = trim((string) get_option('admin_email', ''));
+		return is_email($admin) ? $admin : '';
+	}
 
 	public static function notify_admin_booking_submitted(int $booking_id): void {
+		$to = self::get_notification_email();
+		if ($to === '') {
+			return;
+		}
 		$subject = __('Nueva reserva pendiente de validar', 'cie-lab-booking');
 		$link = admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . $booking_id);
 		$message = sprintf(
@@ -25,7 +37,7 @@ final class Mailer {
 			$link
 		);
 
-		self::send(self::ADMIN_FALLBACK_EMAIL, $subject, $message);
+		self::send($to, $subject, $message);
 	}
 
 	public static function notify_user_booking_status(int $user_id, string $subject, string $message): void {

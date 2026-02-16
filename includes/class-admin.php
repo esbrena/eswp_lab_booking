@@ -72,8 +72,51 @@ final class Admin {
 	}
 
 	public static function render_dashboard(): void {
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('No tienes permisos.', 'cie-lab-booking'), 403);
+		}
+
+		// Settings: notification email.
+		if (!empty($_POST['cie_lab_booking_save_settings'])) {
+			check_admin_referer('cie_lab_booking_save_settings', '_wpnonce_cie_lab_booking_settings');
+
+			$email = trim((string) ($_POST['cie_lab_booking_notification_email'] ?? ''));
+			if ($email !== '' && !is_email($email)) {
+				Util::admin_notice(__('El correo de notificación no es válido.', 'cie-lab-booking'), 'error');
+			} else {
+				if ($email === '') {
+					delete_option(Mailer::OPTION_NOTIFICATION_EMAIL);
+				} else {
+					update_option(Mailer::OPTION_NOTIFICATION_EMAIL, $email, false);
+				}
+				Util::admin_notice(__('Ajustes guardados.', 'cie-lab-booking'), 'success');
+			}
+		}
+
+		$current_email = trim((string) get_option(Mailer::OPTION_NOTIFICATION_EMAIL, ''));
+		$default_admin_email = trim((string) get_option('admin_email', ''));
+
 		echo '<div class="wrap"><h1>' . esc_html__('CIE - Reservas', 'cie-lab-booking') . '</h1>';
 		echo '<p>' . esc_html__('Desde aquí puedes gestionar el calendario y las reservas.', 'cie-lab-booking') . '</p>';
+
+		echo '<hr/>';
+		echo '<h2>' . esc_html__('Notificaciones', 'cie-lab-booking') . '</h2>';
+		echo '<p>' . esc_html__('Define el correo al que se enviarán las notificaciones de nuevas reservas. Si lo dejas vacío, se usará el correo del administrador del sitio.', 'cie-lab-booking') . '</p>';
+
+		echo '<form method="post" style="max-width:560px">';
+		wp_nonce_field('cie_lab_booking_save_settings', '_wpnonce_cie_lab_booking_settings');
+		echo '<input type="hidden" name="cie_lab_booking_save_settings" value="1" />';
+
+		echo '<p><label><strong>' . esc_html__('Correo de notificación', 'cie-lab-booking') . '</strong><br/>';
+		printf(
+			'<input type="email" name="cie_lab_booking_notification_email" value="%1$s" placeholder="%2$s" style="width:100%%" />',
+			esc_attr($current_email),
+			esc_attr($default_admin_email)
+		);
+		echo '</label></p>';
+		echo '<p><button class="button button-primary">' . esc_html__('Guardar', 'cie-lab-booking') . '</button></p>';
+		echo '</form>';
+
 		echo '</div>';
 	}
 
