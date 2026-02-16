@@ -1,0 +1,374 @@
+.cie-lab-booking {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.cie-lab-booking--placeholder {
+  opacity: 0.75;
+}
+
+.cie-lab-booking__errors {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+.cie-lab-booking__success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  padding: 16px;
+  border-radius: 10px;
+}
+
+.cie-lab-booking__success-title {
+  font-weight: 700;
+  color: #14532d;
+  margin-bottom: 6px;
+}
+
+.cie-lab-booking__success-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.cie-btn {
+  display: inline-block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff;
+  color: #0f172a;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.cie-btn--primary {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+
+.cie-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cie-table th,
+.cie-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.cie-table thead th {
+  text-align: left;
+  font-weight: 700;
+  color: #0f172a;
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.cie-status-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.cie-status-tag--pending {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+.cie-status-tag--approved {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #14532d;
+}
+.cie-status-tag--rejected {
+  background: #fff1f2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+.cie-status-tag--changes {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e3a8a;
+}
+.cie-status-tag--cancelled {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+.cie-native-tabs {
+  margin-top: 10px;
+}
+
+.cie-native-tabs__radio {
+  position: absolute;
+  left: -9999px;
+}
+
+.cie-native-tabs__bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.cie-native-tabs__tab {
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+  user-select: none;
+}
+
+.cie-native-tabs__panel {
+  padding-top: 10px;
+}
+
+/* CSS-only selection state */
+.cie-native-tabs__panel--current,
+.cie-native-tabs__panel--history {
+  display: none;
+}
+
+/* When current checked */
+.cie-native-tabs__radio:first-of-type:checked ~ .cie-native-tabs__bar label[for$="-current"] {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+.cie-native-tabs__radio:first-of-type:checked ~ .cie-native-tabs__panel--current {
+  display: block;
+}
+
+/* When history checked */
+.cie-native-tabs__radio:nth-of-type(2):checked ~ .cie-native-tabs__bar label[for$="-history"] {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+.cie-native-tabs__radio:nth-of-type(2):checked ~ .cie-native-tabs__panel--history {
+  display: block;
+}
+
+.cie-native-accordion {
+  display: none;
+  margin-top: 10px;
+}
+
+.cie-native-accordion details {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.cie-native-accordion summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 12px;
+  list-style: none;
+}
+
+.cie-native-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.cie-native-accordion__panel {
+  padding: 0 12px 12px 12px;
+}
+
+@media (max-width: 640px) {
+  .cie-native-tabs {
+    display: none;
+  }
+  .cie-native-accordion {
+    display: block;
+  }
+}
+
+.cie-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 14px 12px;
+  max-width: 420px;
+}
+
+.cie-card__title {
+  color: #334155;
+  font-weight: 700;
+}
+
+.cie-card__value {
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 800;
+  margin-top: 8px;
+  color: #0f172a;
+}
+
+.cie-card__actions {
+  margin-top: 12px;
+}
+
+.cie-lab-booking__hint {
+  margin: 0 0 8px 0;
+  color: #334155;
+}
+
+.cie-lab-booking__notice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.cie-lab-booking__notice.is-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.cie-lab-booking__notice.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.cie-lab-booking__notice.is-info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.cie-is-disabled {
+  opacity: 0.55;
+}
+
+.cie-is-disabled input {
+  cursor: not-allowed;
+}
+
+.cie-lab-booking__calendar td,
+.cie-lab-booking__calendar th {
+  width: 32px;
+  height: 28px;
+}
+
+.cie-calendar-day {
+  cursor: pointer;
+  position: relative;
+}
+
+.cie-lab-booking__calendar {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+.cie-lab-booking__calendar caption {
+  font-size: 20px;
+  font-weight: 900;
+  padding: 8px 0 10px;
+  color: #0f172a;
+}
+
+.cie-lab-booking__calendar th {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 800;
+}
+
+.cie-lab-booking__calendar td {
+  border-radius: 8px;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.cie-lab-booking__calendar td.cie-calendar-day:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+}
+
+.cie-cal-tooltip {
+  z-index: 99999;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  font-size: 13px;
+}
+
+.cie-cal-tooltip__date {
+  margin-bottom: 6px;
+}
+
+.cie-cal-tooltip__line {
+  color: #334155;
+}
+
+.cie-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+}
+
+.cie-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.cie-modal__panel {
+  position: relative;
+  margin: 8vh auto;
+  width: min(720px, calc(100% - 32px));
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  padding: 18px 16px;
+}
+
+.cie-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cie-cal-list {
+  margin: 8px 0 0 18px;
+}
+
+.cie-cal-muted {
+  color: #475569;
+  font-size: 13px;
+}
+
