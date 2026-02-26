@@ -15,6 +15,59 @@
       });
     }
 
+    function setupBlockResourcePickers() {
+      $('[data-cie-all-toggle="1"]').each(function () {
+        var $toggle = $(this);
+        var $container = $toggle.closest('form, .inside, .cie-admin-panel');
+        var $picker = $container.find('[data-cie-resource-picker="1"]').first();
+        if (!$picker.length) return;
+
+        function refresh() {
+          var all = $toggle.is(':checked');
+          $picker.toggle(!all);
+          $picker.find('input[type="checkbox"]').prop('disabled', all);
+        }
+
+        $toggle.on('change', refresh);
+        refresh();
+      });
+    }
+
+    function setupResourceMetaForm() {
+      $('[data-cie-resource-kind="1"]').each(function () {
+        var $kind = $(this);
+        var $container = $kind.closest('.inside, form');
+        var $groupWrap = $container.find('[data-cie-resource-group-wrap="1"]').first();
+        var $qtyWrap = $container.find('[data-cie-resource-quantity-wrap="1"]').first();
+        var $groupSelect = $container.find('[data-cie-resource-group-existing="1"]').first();
+        var $groupNewInput = $container.find('input[name="cie_resource_group_new"]').first();
+
+        function refreshKind() {
+          var isEquipment = $kind.val() === 'equipment';
+          $groupWrap.toggle(isEquipment);
+          $qtyWrap.toggle(isEquipment);
+          $groupWrap.find('input,select').prop('disabled', !isEquipment);
+          $qtyWrap.find('input').prop('disabled', !isEquipment);
+        }
+
+        function refreshGroupMode() {
+          var creatingNew = $groupSelect.val() === '__new__';
+          if ($groupNewInput.length) {
+            $groupNewInput.prop('disabled', !creatingNew);
+            $groupNewInput.closest('p').toggle(creatingNew);
+          }
+        }
+
+        $kind.on('change', refreshKind);
+        $groupSelect.on('change', refreshGroupMode);
+        refreshKind();
+        refreshGroupMode();
+      });
+    }
+
+    setupBlockResourcePickers();
+    setupResourceMetaForm();
+
     // Calendar hover/click details on admin calendar table.
     var tooltip = null;
     var detailCache = {};

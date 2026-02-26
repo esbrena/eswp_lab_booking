@@ -97,6 +97,12 @@ final class Shortcodes {
 
 		$spaces = Bookings::get_resources('space', true);
 		$equipment_grouped = Bookings::get_equipment_grouped(true);
+		$range_prefill = trim((string) ($_POST['booking_range'] ?? ''));
+		$posted_start = trim((string) ($_POST['start_date'] ?? ''));
+		$posted_end = trim((string) ($_POST['end_date'] ?? ''));
+		if ($range_prefill === '' && $posted_start !== '' && $posted_end !== '') {
+			$range_prefill = $posted_start . ' to ' . $posted_end;
+		}
 
 		ob_start();
 		?>
@@ -152,79 +158,86 @@ final class Shortcodes {
 				<?php endif; ?>
 
 				<div class="cie-lab-booking__flow" data-cie-booking-flow="1">
-				<fieldset data-cie-step="1">
-					<legend><?php echo esc_html__('(1) Seleccione en el calendario las fechas de la reserva', 'cie-lab-booking'); ?></legend>
+				<div class="cie-lab-booking__steps-indicator">
+					<span>1. <?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></span>
+					<span>2. <?php echo esc_html__('Tipo', 'cie-lab-booking'); ?></span>
+					<span>3. <?php echo esc_html__('Espacios', 'cie-lab-booking'); ?></span>
+					<span>4. <?php echo esc_html__('Equipos', 'cie-lab-booking'); ?></span>
+					<span>5. <?php echo esc_html__('Cursos', 'cie-lab-booking'); ?></span>
+					<span>6. <?php echo esc_html__('Proyecto', 'cie-lab-booking'); ?></span>
+				</div>
+				<fieldset data-cie-step="1" class="cie-step-card">
+					<legend><?php echo esc_html__('1) Seleccione el rango de fechas de la reserva', 'cie-lab-booking'); ?></legend>
 					<p>
 						<label>
-							<?php echo esc_html__('Desde', 'cie-lab-booking'); ?>
-							<input type="text" class="cie-date" name="start_date" placeholder="YYYY-MM-DD" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" required />
+							<?php echo esc_html__('Fechas', 'cie-lab-booking'); ?><br/>
+							<input type="text" class="cie-date-range" name="booking_range" placeholder="YYYY-MM-DD to YYYY-MM-DD" value="<?php echo esc_attr($range_prefill); ?>" required />
+							<input type="hidden" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" />
+							<input type="hidden" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" />
 						</label>
 					</p>
-					<p>
-						<label>
-							<?php echo esc_html__('Hasta', 'cie-lab-booking'); ?>
-							<input type="text" class="cie-date" name="end_date" placeholder="YYYY-MM-DD" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" required />
-						</label>
-					</p>
+					<p class="cie-lab-booking__hint"><?php echo esc_html__('Solo se pueden seleccionar fechas desde hoy y hasta 3 meses en adelante.', 'cie-lab-booking'); ?></p>
 					<div class="cie-lab-booking__notice" data-cie-notice="dates" style="display:none"></div>
 				</fieldset>
 
-				<fieldset data-cie-step="2">
-					<legend><?php echo esc_html__('(2) Seleccione el tipo de instalación que quiere usar', 'cie-lab-booking'); ?></legend>
-					<label>
+				<fieldset data-cie-step="2" class="cie-step-card">
+					<legend><?php echo esc_html__('2) Seleccione el tipo de instalación que quiere usar', 'cie-lab-booking'); ?></legend>
+					<label class="cie-option">
 						<input type="checkbox" name="use_space" value="1" <?php checked(!empty($_POST['use_space'])); ?> />
-						<?php echo esc_html__('el laboratorio sin equipos', 'cie-lab-booking'); ?>
-					</label><br/>
-					<label>
+						<?php echo esc_html__('Laboratorio sin equipos', 'cie-lab-booking'); ?>
+					</label>
+					<label class="cie-option">
 						<input type="checkbox" name="use_equipment" value="1" <?php checked(!empty($_POST['use_equipment'])); ?> />
-						<?php echo esc_html__('los equipos (sin usar el laboratorio)', 'cie-lab-booking'); ?>
+						<?php echo esc_html__('Equipos (sin usar el laboratorio)', 'cie-lab-booking'); ?>
 					</label>
 					<div class="cie-lab-booking__notice" data-cie-notice="type" style="display:none"></div>
 				</fieldset>
 
-				<fieldset data-cie-step="3">
-					<legend><?php echo esc_html__('(3) Espacios', 'cie-lab-booking'); ?></legend>
+				<fieldset data-cie-step="3" class="cie-step-card">
+					<legend><?php echo esc_html__('3) Espacios', 'cie-lab-booking'); ?></legend>
 					<p class="cie-lab-booking__hint"><?php echo esc_html__('Seleccione qué espacio quiere reservar:', 'cie-lab-booking'); ?></p>
 					<div class="cie-lab-booking__notice" data-cie-notice="spaces" style="display:none"></div>
 					<?php foreach ($spaces as $space): ?>
-						<label>
+						<label class="cie-option">
 							<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" <?php echo in_array((string) $space->ID, (array) ($_POST['spaces'] ?? []), true) ? 'checked' : ''; ?> />
 							<?php echo esc_html($space->post_title); ?>
-						</label><br/>
+						</label>
 					<?php endforeach; ?>
 				</fieldset>
 
-				<fieldset data-cie-step="4">
-					<legend><?php echo esc_html__('(4) Equipos', 'cie-lab-booking'); ?></legend>
+				<fieldset data-cie-step="4" class="cie-step-card">
+					<legend><?php echo esc_html__('4) Equipos', 'cie-lab-booking'); ?></legend>
 					<div class="cie-lab-booking__notice" data-cie-notice="equipment" style="display:none"></div>
 					<?php foreach ($equipment_grouped as $group => $items): ?>
 						<details>
 							<summary><?php echo esc_html(self::group_label($group)); ?></summary>
 							<?php foreach ($items as $eq): ?>
-								<label>
+								<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
+								<label class="cie-option">
 									<input type="checkbox" name="equipment[]" value="<?php echo esc_attr($eq->ID); ?>" <?php echo in_array((string) $eq->ID, (array) ($_POST['equipment'] ?? []), true) ? 'checked' : ''; ?> />
 									<?php echo esc_html($eq->post_title); ?>
-								</label><br/>
+									<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
+								</label>
 							<?php endforeach; ?>
 						</details>
 					<?php endforeach; ?>
 				</fieldset>
 
-				<fieldset data-cie-step="5">
-					<legend><?php echo esc_html__('(5) ¿Ha realizado los cursos de formación para el uso de los espacios/equipos seleccionados?', 'cie-lab-booking'); ?></legend>
-					<label>
+				<fieldset data-cie-step="5" class="cie-step-card">
+					<legend><?php echo esc_html__('5) ¿Ha realizado los cursos de formación para los recursos seleccionados?', 'cie-lab-booking'); ?></legend>
+					<label class="cie-option">
 						<input type="radio" name="has_courses" value="yes" <?php checked(($_POST['has_courses'] ?? '') === 'yes'); ?> required />
 						<?php echo esc_html__('Sí', 'cie-lab-booking'); ?>
 					</label>
-					<label style="margin-left:12px">
+					<label class="cie-option">
 						<input type="radio" name="has_courses" value="no" <?php checked(($_POST['has_courses'] ?? '') === 'no'); ?> />
 						<?php echo esc_html__('No', 'cie-lab-booking'); ?>
 					</label>
 					<div class="cie-lab-booking__notice" data-cie-notice="courses" style="display:none"></div>
 				</fieldset>
 
-				<fieldset data-cie-step="6">
-					<legend><?php echo esc_html__('(6) Datos del proyecto', 'cie-lab-booking'); ?></legend>
+				<fieldset data-cie-step="6" class="cie-step-card">
+					<legend><?php echo esc_html__('6) Datos del proyecto', 'cie-lab-booking'); ?></legend>
 					<p>
 						<label>
 							<?php echo esc_html__('Nombre del proyecto*', 'cie-lab-booking'); ?><br/>
@@ -251,8 +264,8 @@ final class Shortcodes {
 					</p>
 				</fieldset>
 
-				<p>
-					<button type="submit" data-cie-submit><?php echo esc_html__('Enviar', 'cie-lab-booking'); ?></button>
+				<p class="cie-lab-booking__submit" data-cie-submit-wrap style="display:none">
+					<button type="submit" class="cie-btn cie-btn--primary" data-cie-submit><?php echo esc_html__('Enviar reserva', 'cie-lab-booking'); ?></button>
 				</p>
 				</div>
 			</form>

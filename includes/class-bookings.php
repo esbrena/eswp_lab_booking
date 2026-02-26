@@ -82,10 +82,24 @@ final class Bookings {
 
 		$start = isset($raw['start_date']) ? Util::normalize_date_ymd((string) $raw['start_date']) : null;
 		$end = isset($raw['end_date']) ? Util::normalize_date_ymd((string) $raw['end_date']) : null;
+		if ((!$start || !$end) && !empty($raw['booking_range'])) {
+			[$range_start, $range_end] = self::parse_date_range_input((string) $raw['booking_range']);
+			$start = $start ?: $range_start;
+			$end = $end ?: $range_end;
+		}
 		if (!$start || !$end) {
 			$errors[] = __('Seleccione fechas válidas para la reserva.', 'cie-lab-booking');
 		} elseif ($end < $start) {
 			$errors[] = __('La fecha "hasta" no puede ser anterior a la fecha "desde".', 'cie-lab-booking');
+		} else {
+			$today = gmdate('Y-m-d');
+			$max_date = gmdate('Y-m-d', strtotime('+3 months', strtotime($today . ' 00:00:00')));
+			if ($start < $today) {
+				$errors[] = __('La reserva solo permite fechas desde hoy.', 'cie-lab-booking');
+			}
+			if ($end > $max_date) {
+				$errors[] = __('La reserva solo permite fechas dentro de los próximos 3 meses.', 'cie-lab-booking');
+			}
 		}
 
 		$use_space = !empty($raw['use_space']);
@@ -157,6 +171,153 @@ final class Bookings {
 				'project_ip_email' => $project_ip_email,
 			],
 		];
+	}
+
+	public static function get_resource_quantity(int $resource_id): int {
+		$quantity = (int) get_post_meta($resource_id, '_cie_resource_quantity', true);
+		return $quantity > 0 ? $quantity : 1;
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	public static function get_equipment_groups(): array {
+		$groups = [];
+		foreach (self::get_resources('equipment', false) as $resource) {
+			$group = sanitize_key((string) get_post_meta((int) $resource->ID, '_cie_resource_group', true));
+			if ($group === '') {
+				$group = 'other';
+			}
+			$groups[$group] = $group;
+		}
+		ksort($groups);
+		return array_values($groups);
+	}
+
+	/**
+	 * @return array<int,array{
+	 *   booking_id:int,
+	 *   start_date:string,
+	 *   end_date:string,
+	 *   status:string,
+	 *   user_id:int,
+	 *   user_name:string,
+	 *   user_email:string,
+	 *   detail_url:string
+	 * }>
+	 */
+	public static function get_resource_active_booking_items(int $resource_id, ?string $date = null): array {
+		$date = $date ?: gmdate('Y-m-d');
+		$bookings = self::get_overlapping_approved_bookings($date, $date);
+		$items = [];
+		foreach ($bookings as $booking) {
+			$spaces = array_map('intval', (array) get_post_meta((int) $booking->ID, '_cie_booking_spaces', true));
+			$equipment = array_map('intval', (array) get_post_meta((int) $booking->ID, '_cie_booking_equipment', true));
+			if (!in_array($resource_id, array_merge($spaces, $equipment), true)) {
+				continue;
+			}
+
+			$user = get_user_by('id', (int) $booking->post_author);
+			$items[] = [
+				'booking_id' => (int) $booking->ID,
+				'start_date' => (string) get_post_meta((int) $booking->ID, '_cie_booking_start_date', true),
+				'end_date' => (string) get_post_meta((int) $booking->ID, '_cie_booking_end_date', true),
+				'status' => (string) get_post_meta((int) $booking->ID, '_cie_booking_status', true),
+				'user_id' => (int) $booking->post_author,
+				'user_name' => $user ? (string) $user->display_name : (string) __('Usuario', 'cie-lab-booking'),
+				'user_email' => $user ? (string) $user->user_email : '',
+				'detail_url' => admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . (int) $booking->ID),
+			];
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @return array<int,array{
+	 *   booking_id:int,
+	 *   start_date:string,
+	 *   end_date:string,
+	 *   status:string,
+	 *   submitted_at:string,
+	 *   user_id:int,
+	 *   user_name:string,
+	 *   user_email:string,
+	 *   detail_url:string,
+	 *   is_active:bool
+	 * }>
+	 */
+	public static function get_resource_booking_history(int $resource_id, int $limit = 200): array {
+		$needle = 'i:' . (int) $resource_id . ';';
+		$posts = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => $limit,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'meta_query' => [
+				'relation' => 'OR',
+				[
+					'key' => '_cie_booking_spaces',
+					'value' => $needle,
+					'compare' => 'LIKE',
+				],
+				[
+					'key' => '_cie_booking_equipment',
+					'value' => $needle,
+					'compare' => 'LIKE',
+				],
+			],
+		]);
+		$posts = is_array($posts) ? $posts : [];
+
+		$today = gmdate('Y-m-d');
+		$history = [];
+		foreach ($posts as $booking) {
+			$user = get_user_by('id', (int) $booking->post_author);
+			$status = (string) get_post_meta((int) $booking->ID, '_cie_booking_status', true);
+			$start = (string) get_post_meta((int) $booking->ID, '_cie_booking_start_date', true);
+			$end = (string) get_post_meta((int) $booking->ID, '_cie_booking_end_date', true);
+			$is_active = $status === Post_Types::BOOKING_STATUS_APPROVED && $start !== '' && $end !== '' && $start <= $today && $today <= $end;
+
+			$history[] = [
+				'booking_id' => (int) $booking->ID,
+				'start_date' => $start,
+				'end_date' => $end,
+				'status' => $status,
+				'submitted_at' => (string) $booking->post_date,
+				'user_id' => (int) $booking->post_author,
+				'user_name' => $user ? (string) $user->display_name : (string) __('Usuario', 'cie-lab-booking'),
+				'user_email' => $user ? (string) $user->user_email : '',
+				'detail_url' => admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . (int) $booking->ID),
+				'is_active' => $is_active,
+			];
+		}
+
+		return $history;
+	}
+
+	/**
+	 * @return array{0:?string,1:?string}
+	 */
+	private static function parse_date_range_input(string $range): array {
+		$range = trim($range);
+		if ($range === '') {
+			return [null, null];
+		}
+
+		$parts = preg_split('/\s+to\s+/i', $range);
+		if (!$parts || empty($parts[0])) {
+			return [null, null];
+		}
+
+		$start = Util::normalize_date_ymd((string) $parts[0]);
+		$end = isset($parts[1]) ? Util::normalize_date_ymd((string) $parts[1]) : $start;
+		if (!$start || !$end) {
+			return [null, null];
+		}
+
+		return [$start, $end];
 	}
 
 	/**
@@ -316,31 +477,57 @@ final class Bookings {
 	/**
 	 * @return array{spaces:array<int>,equipment:array<int>,blocked:bool}
 	 */
-	public static function find_conflicts(string $start_date, string $end_date, array $space_ids, array $equipment_ids): array {
-		$conflicting_space_ids = [];
-		$conflicting_equipment_ids = [];
+	public static function find_conflicts(string $start_date, string $end_date, array $space_ids, array $equipment_ids, int $exclude_booking_id = 0): array {
+		$space_ids = array_values(array_unique(array_filter(array_map('intval', $space_ids))));
+		$equipment_ids = array_values(array_unique(array_filter(array_map('intval', $equipment_ids))));
+
+		$reserved_space_counts = [];
+		$reserved_equipment_counts = [];
 
 		$approved = self::get_overlapping_approved_bookings($start_date, $end_date);
 		foreach ($approved as $booking) {
-			$b_spaces = (array) get_post_meta($booking->ID, '_cie_booking_spaces', true);
-			$b_equipment = (array) get_post_meta($booking->ID, '_cie_booking_equipment', true);
-
-			if ($space_ids && $b_spaces) {
-				$intersection = array_values(array_intersect(array_map('intval', $space_ids), array_map('intval', $b_spaces)));
-				$conflicting_space_ids = array_merge($conflicting_space_ids, $intersection);
+			if ($exclude_booking_id > 0 && (int) $booking->ID === $exclude_booking_id) {
+				continue;
 			}
 
-			if ($equipment_ids && $b_equipment) {
-				$intersection = array_values(array_intersect(array_map('intval', $equipment_ids), array_map('intval', $b_equipment)));
-				$conflicting_equipment_ids = array_merge($conflicting_equipment_ids, $intersection);
+			foreach ((array) get_post_meta((int) $booking->ID, '_cie_booking_spaces', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid > 0) {
+					$reserved_space_counts[$rid] = (int) ($reserved_space_counts[$rid] ?? 0) + 1;
+				}
+			}
+
+			foreach ((array) get_post_meta((int) $booking->ID, '_cie_booking_equipment', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid > 0) {
+					$reserved_equipment_counts[$rid] = (int) ($reserved_equipment_counts[$rid] ?? 0) + 1;
+				}
+			}
+		}
+
+		$conflicting_space_ids = [];
+		foreach ($space_ids as $rid) {
+			$quantity = self::get_resource_quantity($rid);
+			$reserved = (int) ($reserved_space_counts[$rid] ?? 0);
+			if ($reserved >= $quantity) {
+				$conflicting_space_ids[] = $rid;
+			}
+		}
+
+		$conflicting_equipment_ids = [];
+		foreach ($equipment_ids as $rid) {
+			$quantity = self::get_resource_quantity($rid);
+			$reserved = (int) ($reserved_equipment_counts[$rid] ?? 0);
+			if ($reserved >= $quantity) {
+				$conflicting_equipment_ids[] = $rid;
 			}
 		}
 
 		$blocked = self::has_block_in_range($start_date, $end_date, array_merge($space_ids, $equipment_ids));
 
 		return [
-			'spaces' => array_values(array_unique(array_filter(array_map('intval', $conflicting_space_ids)))),
-			'equipment' => array_values(array_unique(array_filter(array_map('intval', $conflicting_equipment_ids)))),
+			'spaces' => $conflicting_space_ids,
+			'equipment' => $conflicting_equipment_ids,
 			'blocked' => $blocked,
 		];
 	}
@@ -499,7 +686,13 @@ final class Bookings {
 	 *
 	 * @param array<int> $space_ids
 	 * @param array<int> $equipment_ids
-	 * @return array{blocked:bool,spaces:array<int,bool>,equipment:array<int,bool>}
+	 * @return array{
+	 *   blocked:bool,
+	 *   spaces:array<int,bool>,
+	 *   equipment:array<int,bool>,
+	 *   space_stats:array<int,array{quantity:int,reserved:int,available:int}>,
+	 *   equipment_stats:array<int,array{quantity:int,reserved:int,available:int}>
+	 * }
 	 */
 	public static function get_resources_availability(string $start, string $end, array $space_ids, array $equipment_ids): array {
 		$space_ids = array_values(array_unique(array_filter(array_map('intval', $space_ids))));
@@ -512,13 +705,13 @@ final class Bookings {
 			foreach ((array) get_post_meta($booking->ID, '_cie_booking_spaces', true) as $rid) {
 				$rid = (int) $rid;
 				if ($rid) {
-					$reserved_space[$rid] = true;
+					$reserved_space[$rid] = (int) ($reserved_space[$rid] ?? 0) + 1;
 				}
 			}
 			foreach ((array) get_post_meta($booking->ID, '_cie_booking_equipment', true) as $rid) {
 				$rid = (int) $rid;
 				if ($rid) {
-					$reserved_equipment[$rid] = true;
+					$reserved_equipment[$rid] = (int) ($reserved_equipment[$rid] ?? 0) + 1;
 				}
 			}
 		}
@@ -539,15 +732,33 @@ final class Bookings {
 		}
 
 		$space_map = [];
+		$space_stats = [];
 		foreach ($space_ids as $id) {
 			$is_blocked = $blocked_all || isset($blocked_resources[$id]);
-			$space_map[$id] = !$is_blocked && !isset($reserved_space[$id]);
+			$quantity = self::get_resource_quantity($id);
+			$reserved = (int) ($reserved_space[$id] ?? 0);
+			$available_units = max($quantity - $reserved, 0);
+			$space_map[$id] = !$is_blocked && $available_units > 0;
+			$space_stats[$id] = [
+				'quantity' => $quantity,
+				'reserved' => $reserved,
+				'available' => $is_blocked ? 0 : $available_units,
+			];
 		}
 
 		$equipment_map = [];
+		$equipment_stats = [];
 		foreach ($equipment_ids as $id) {
 			$is_blocked = $blocked_all || isset($blocked_resources[$id]);
-			$equipment_map[$id] = !$is_blocked && !isset($reserved_equipment[$id]);
+			$quantity = self::get_resource_quantity($id);
+			$reserved = (int) ($reserved_equipment[$id] ?? 0);
+			$available_units = max($quantity - $reserved, 0);
+			$equipment_map[$id] = !$is_blocked && $available_units > 0;
+			$equipment_stats[$id] = [
+				'quantity' => $quantity,
+				'reserved' => $reserved,
+				'available' => $is_blocked ? 0 : $available_units,
+			];
 		}
 
 		// If there are any blocks and they intersect relevant resources, consider the range blocked.
@@ -569,6 +780,8 @@ final class Bookings {
 			'blocked' => $any_blocked,
 			'spaces' => $space_map,
 			'equipment' => $equipment_map,
+			'space_stats' => $space_stats,
+			'equipment_stats' => $equipment_stats,
 		];
 	}
 

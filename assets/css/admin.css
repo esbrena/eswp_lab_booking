@@ -80,3 +80,129 @@
   font-size: 13px;
 }
 
+.cie-admin-calendar-toolbar {
+  margin: 12px 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cie-admin-calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(640px, 1fr) minmax(360px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+
+.cie-admin-calendar-layout__left {
+  min-width: 0;
+}
+
+.cie-admin-calendar-layout__right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cie-admin-panel {
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.cie-admin-panel h2 {
+  margin-top: 2px;
+}
+
+.cie-admin-mini-table th,
+.cie-admin-mini-table td {
+  vertical-align: top;
+}
+
+.cie-admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+.cie-admin-resource-picker {
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.cie-admin-resource-picker label {
+  display: block;
+  margin: 4px 0;
+}
+
+.cie-admin-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.cie-admin-badge.is-muted {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.cie-admin-badge.is-active {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #22c55e;
+}
+
+.cie-admin-badge.is-status-pending {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #f59e0b;
+}
+
+.cie-admin-badge.is-status-approved {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #22c55e;
+}
+
+.cie-admin-badge.is-status-rejected {
+  background: #fff1f2;
+  color: #9f1239;
+  border-color: #ef4444;
+}
+
+.cie-admin-badge.is-status-changes {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #3b82f6;
+}
+
+.cie-admin-badge.is-status-cancelled {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #94a3b8;
+}
+
+.cie-admin-stock {
+  font-weight: 700;
+}
+
+@media (max-width: 1280px) {
+  .cie-admin-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+}
+

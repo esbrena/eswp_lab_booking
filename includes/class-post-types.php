@@ -80,6 +80,7 @@ final class Post_Types {
 			'group' => 'spaces',
 			'code' => 'SPACE_CABINA',
 			'available' => '1',
+			'quantity' => 1,
 		]);
 		self::upsert_resource([
 			'title' => 'Laboratorio',
@@ -87,6 +88,7 @@ final class Post_Types {
 			'group' => 'spaces',
 			'code' => 'SPACE_LAB',
 			'available' => '1',
+			'quantity' => 1,
 		]);
 
 		$csv_path = CIE_LAB_BOOKING_DIR . '/assets/data/equipos.csv';
@@ -146,6 +148,7 @@ final class Post_Types {
 				'serial' => $serial,
 				'place' => $place,
 				'available' => '1',
+				'quantity' => 1,
 			]);
 		}
 
@@ -171,7 +174,7 @@ final class Post_Types {
 	}
 
 	/**
-	 * @param array{title:string,kind:string,group:string,code:string,available:string,model?:string,serial?:string,place?:string} $data
+	 * @param array{title:string,kind:string,group:string,code:string,available:string,quantity:int,model?:string,serial?:string,place?:string} $data
 	 */
 	private static function upsert_resource(array $data): void {
 		$existing = get_posts([
@@ -208,6 +211,7 @@ final class Post_Types {
 		update_post_meta($post_id, '_cie_resource_group', $data['group']);
 		update_post_meta($post_id, '_cie_resource_code', $data['code']);
 		update_post_meta($post_id, '_cie_resource_available', $data['available']);
+		update_post_meta($post_id, '_cie_resource_quantity', max(1, (int) $data['quantity']));
 		update_post_meta($post_id, '_cie_resource_model', $data['model'] ?? '');
 		update_post_meta($post_id, '_cie_resource_serial', $data['serial'] ?? '');
 		update_post_meta($post_id, '_cie_resource_place', $data['place'] ?? '');
