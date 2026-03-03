@@ -25,3 +25,15 @@ register_deactivation_hook(__FILE__, ['CIE_Lab_Booking\\Bootstrap', 'deactivate'
 
 add_action('plugins_loaded', ['CIE_Lab_Booking\\Bootstrap', 'init']);
 
+if (!function_exists('cie_lab_booking_get_user_booking_history_html')) {
+	/**
+	 * Public function for external plugins.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 * @return string HTML table with booking history and status.
+	 */
+	function cie_lab_booking_get_user_booking_history_html(int $user_id): string {
+		return \CIE_Lab_Booking\Shortcodes::get_user_booking_history_html($user_id);
+	}
+}
+

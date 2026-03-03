@@ -514,6 +514,68 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 
+	/**
+	 * Public API helper for external plugins.
+	 *
+	 * Returns an HTML table with the booking history for the given user ID,
+	 * including reservation dates, resources and current booking status.
+	 */
+	public static function get_user_booking_history_html(int $user_id): string {
+		$user_id = (int) $user_id;
+		if ($user_id <= 0 || !get_user_by('id', $user_id)) {
+			return '<p><em>' . esc_html__('Usuario no válido.', 'cie-lab-booking') . '</em></p>';
+		}
+
+		$bookings = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'author' => $user_id,
+		]);
+
+		if (!$bookings) {
+			return '<p><em>' . esc_html__('No hay reservas para este usuario.', 'cie-lab-booking') . '</em></p>';
+		}
+
+		ob_start();
+		?>
+		<table class="cie-table cie-user-booking-history">
+			<thead>
+				<tr>
+					<th><?php echo esc_html__('Solicitud', 'cie-lab-booking'); ?></th>
+					<th><?php echo esc_html__('Fechas de reserva', 'cie-lab-booking'); ?></th>
+					<th><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
+					<th><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+			<?php foreach ($bookings as $b): ?>
+				<?php
+				$start = (string) get_post_meta($b->ID, '_cie_booking_start_date', true);
+				$end = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
+				$status = (string) get_post_meta($b->ID, '_cie_booking_status', true);
+				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
+				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
+				?>
+				<tr>
+					<td><?php echo esc_html((string) mysql2date(get_option('date_format'), (string) $b->post_date)); ?></td>
+					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
+					<td><?php echo esc_html(self::resources_summary($spaces, $equipment)); ?></td>
+					<td>
+						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr(self::status_slug($status)); ?>">
+							<?php echo esc_html(self::status_label($status)); ?>
+						</span>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+		return (string) ob_get_clean();
+	}
+
 	public static function render_calendar(): string {
 		// Read-only calendar for users: show 3 months starting current month.
 		$start = gmdate('Y-m-01');
