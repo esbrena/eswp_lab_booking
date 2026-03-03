@@ -541,13 +541,15 @@ final class Shortcodes {
 
 		ob_start();
 		?>
-		<table class="cie-table cie-user-booking-history">
+		<table class="wp-list-table widefat fixed striped table-view-list cie-user-booking-history">
 			<thead>
 				<tr>
-					<th><?php echo esc_html__('Solicitud', 'cie-lab-booking'); ?></th>
-					<th><?php echo esc_html__('Fechas de reserva', 'cie-lab-booking'); ?></th>
-					<th><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
-					<th><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Reserva', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Solicitud', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Fechas de reserva', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
+					<th scope="col" class="manage-column"><?php echo esc_html__('Acciones', 'cie-lab-booking'); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -558,8 +560,12 @@ final class Shortcodes {
 				$status = (string) get_post_meta($b->ID, '_cie_booking_status', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
+				$detail_url = admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . (int) $b->ID);
 				?>
 				<tr>
+					<td>
+						<strong><?php echo esc_html(sprintf(__('Reserva #%d', 'cie-lab-booking'), (int) $b->ID)); ?></strong>
+					</td>
 					<td><?php echo esc_html((string) mysql2date(get_option('date_format'), (string) $b->post_date)); ?></td>
 					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
 					<td><?php echo esc_html(self::resources_summary($spaces, $equipment)); ?></td>
@@ -567,6 +573,11 @@ final class Shortcodes {
 						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr(self::status_slug($status)); ?>">
 							<?php echo esc_html(self::status_label($status)); ?>
 						</span>
+					</td>
+					<td>
+						<a class="button button-small" href="<?php echo esc_url($detail_url); ?>">
+							<?php echo esc_html__('Ver reserva', 'cie-lab-booking'); ?>
+						</a>
 					</td>
 				</tr>
 			<?php endforeach; ?>
