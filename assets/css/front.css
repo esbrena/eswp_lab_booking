@@ -272,7 +272,7 @@
 .cie-step-card input[type='text'],
 .cie-step-card input[type='email'],
 .cie-step-card input.cie-date-range {
-  width: min(520px, 100%);
+  width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 9px 10px;
