@@ -535,6 +535,8 @@ final class Shortcodes {
 			'author' => $user_id,
 		]);
 
+		echo "<h3>Reservas</h3>";
+		
 		if (!$bookings) {
 			return '<p><em>' . esc_html__('No hay reservas para este usuario.', 'cie-lab-booking') . '</em></p>';
 		}
@@ -771,6 +773,7 @@ final class Shortcodes {
 
 		ob_start();
 		?>
+		
 		<table class="cie-lab-booking__calendar" style="margin-bottom:16px;">
 			<caption style="text-align:left;"><?php echo esc_html($month_label); ?></caption>
 			<thead>
@@ -824,4 +827,3 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 }
-
