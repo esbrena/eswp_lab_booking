@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) {
 }
 
 final class Bookings {
+	public const OPTION_EQUIPMENT_GROUP_LABELS = 'cie_lab_booking_equipment_group_labels';
+
 	/**
 	 * Equipment dependency rules from the flow annex.
 	 *
@@ -182,16 +184,137 @@ final class Bookings {
 	 * @return array<int,string>
 	 */
 	public static function get_equipment_groups(): array {
-		$groups = [];
+		return array_keys(self::get_equipment_groups_map());
+	}
+
+	/**
+	 * @return array<string,string> slug => label
+	 */
+	public static function get_equipment_groups_map(): array {
+		$raw = get_option(self::OPTION_EQUIPMENT_GROUP_LABELS, []);
+		$map = [];
+
+		if (is_array($raw)) {
+			foreach ($raw as $slug => $label) {
+				$group_slug = sanitize_key((string) $slug);
+				if ($group_slug === '') {
+					continue;
+				}
+				$group_label = sanitize_text_field((string) $label);
+				$map[$group_slug] = $group_label !== '' ? $group_label : self::humanize_equipment_group_slug($group_slug);
+			}
+		}
+
 		foreach (self::get_resources('equipment', false) as $resource) {
 			$group = sanitize_key((string) get_post_meta((int) $resource->ID, '_cie_resource_group', true));
 			if ($group === '') {
 				$group = 'other';
 			}
-			$groups[$group] = $group;
+			if (!isset($map[$group])) {
+				$map[$group] = self::humanize_equipment_group_slug($group);
+			}
 		}
-		ksort($groups);
-		return array_values($groups);
+
+		if (!isset($map['other'])) {
+			$map['other'] = (string) __('Otros', 'cie-lab-booking');
+		}
+
+		uasort(
+			$map,
+			static function (string $a, string $b): int {
+				return strcasecmp($a, $b);
+			}
+		);
+
+		return $map;
+	}
+
+	public static function get_equipment_group_label(string $group): string {
+		$group = sanitize_key($group);
+		if ($group === '') {
+			$group = 'other';
+		}
+
+		$map = self::get_equipment_groups_map();
+		if (isset($map[$group]) && trim((string) $map[$group]) !== '') {
+			return (string) $map[$group];
+		}
+
+		return self::humanize_equipment_group_slug($group);
+	}
+
+	public static function upsert_equipment_group_label(string $group_slug, string $label): void {
+		$group_slug = sanitize_key($group_slug);
+		if ($group_slug === '') {
+			return;
+		}
+
+		$label = sanitize_text_field($label);
+		if ($label === '') {
+			$label = self::humanize_equipment_group_slug($group_slug);
+		}
+
+		$map = self::get_equipment_groups_map();
+		$map[$group_slug] = $label;
+		update_option(self::OPTION_EQUIPMENT_GROUP_LABELS, $map, false);
+	}
+
+	public static function delete_equipment_group(string $group_slug, string $replacement_slug = 'other'): void {
+		$group_slug = sanitize_key($group_slug);
+		$replacement_slug = sanitize_key($replacement_slug);
+		if ($group_slug === '' || $group_slug === 'other') {
+			return;
+		}
+		if ($replacement_slug === '') {
+			$replacement_slug = 'other';
+		}
+
+		$equipment = self::get_resources('equipment', false);
+		foreach ($equipment as $resource) {
+			$current = sanitize_key((string) get_post_meta((int) $resource->ID, '_cie_resource_group', true));
+			if ($current === $group_slug) {
+				update_post_meta((int) $resource->ID, '_cie_resource_group', $replacement_slug);
+			}
+		}
+
+		$map = self::get_equipment_groups_map();
+		unset($map[$group_slug]);
+		if (!isset($map[$replacement_slug])) {
+			$map[$replacement_slug] = self::humanize_equipment_group_slug($replacement_slug);
+		}
+		update_option(self::OPTION_EQUIPMENT_GROUP_LABELS, $map, false);
+	}
+
+	/**
+	 * @return array<string,int> slug => resource count
+	 */
+	public static function get_equipment_group_resource_counts(): array {
+		$counts = [];
+		foreach (self::get_resources('equipment', false) as $resource) {
+			$group = sanitize_key((string) get_post_meta((int) $resource->ID, '_cie_resource_group', true));
+			if ($group === '') {
+				$group = 'other';
+			}
+			$counts[$group] = (int) ($counts[$group] ?? 0) + 1;
+		}
+
+		return $counts;
+	}
+
+	private static function humanize_equipment_group_slug(string $group): string {
+		$group = sanitize_key($group);
+		$map = [
+			'recording' => __('Equipos de grabación', 'cie-lab-booking'),
+			'phonetics' => __('Equipos de análisis fonético', 'cie-lab-booking'),
+			'eye-tracker' => __('Equipos de eye-tracker', 'cie-lab-booking'),
+			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
+			'other' => __('Otros', 'cie-lab-booking'),
+		];
+		if (isset($map[$group])) {
+			return (string) $map[$group];
+		}
+
+		return ucwords(str_replace('-', ' ', $group));
 	}
 
 	/**
@@ -682,6 +805,58 @@ final class Bookings {
 	}
 
 	/**
+	 * Build per-day state map from current user reservations + maintenance blocks.
+	 *
+	 * @return array<string, array{has_space:bool,has_equipment:bool,blocked:bool}>
+	 */
+	public static function build_day_map_for_user(string $start, string $end, int $user_id): array {
+		$user_bookings = self::get_overlapping_user_bookings_for_calendar($start, $end, $user_id);
+		$blocks = self::get_overlapping_blocks($start, $end);
+
+		$map = [];
+		$cursor = strtotime($start . ' 00:00:00');
+		$end_ts = strtotime($end . ' 00:00:00');
+		while ($cursor <= $end_ts) {
+			$key = gmdate('Y-m-d', $cursor);
+			$map[$key] = ['has_space' => false, 'has_equipment' => false, 'blocked' => false];
+			$cursor = strtotime('+1 day', $cursor);
+		}
+
+		foreach ($user_bookings as $b) {
+			$bs = (string) get_post_meta($b->ID, '_cie_booking_start_date', true);
+			$be = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
+			$has_space = !empty((array) get_post_meta($b->ID, '_cie_booking_spaces', true));
+			$has_eq = !empty((array) get_post_meta($b->ID, '_cie_booking_equipment', true));
+			$cur = strtotime($bs . ' 00:00:00');
+			$be_ts = strtotime($be . ' 00:00:00');
+			while ($cur <= $be_ts) {
+				$k = gmdate('Y-m-d', $cur);
+				if (isset($map[$k])) {
+					$map[$k]['has_space'] = $map[$k]['has_space'] || $has_space;
+					$map[$k]['has_equipment'] = $map[$k]['has_equipment'] || $has_eq;
+				}
+				$cur = strtotime('+1 day', $cur);
+			}
+		}
+
+		foreach ($blocks as $block) {
+			$bs = (string) get_post_meta($block->ID, '_cie_block_start_date', true);
+			$be = (string) get_post_meta($block->ID, '_cie_block_end_date', true);
+			$cur = strtotime($bs . ' 00:00:00');
+			$be_ts = strtotime($be . ' 00:00:00');
+			while ($cur <= $be_ts) {
+				$k = gmdate('Y-m-d', $cur);
+				if (isset($map[$k])) {
+					$map[$k]['blocked'] = true;
+				}
+				$cur = strtotime('+1 day', $cur);
+			}
+		}
+
+		return $map;
+	}
+
+	/**
 	 * Per-resource availability map for a date range.
 	 *
 	 * @param array<int> $space_ids
@@ -821,6 +996,41 @@ final class Bookings {
 					'key' => '_cie_booking_status',
 					'value' => Post_Types::BOOKING_STATUS_CANCELLED,
 					'compare' => '!=',
+				],
+			],
+		]);
+
+		return is_array($posts) ? $posts : [];
+	}
+
+	/**
+	 * @return array<int,\WP_Post>
+	 */
+	public static function get_overlapping_user_bookings_for_calendar(string $start_date, string $end_date, int $user_id): array {
+		$posts = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'author' => $user_id,
+			'meta_query' => [
+				[
+					'key' => '_cie_booking_start_date',
+					'value' => $end_date,
+					'compare' => '<=',
+					'type' => 'DATE',
+				],
+				[
+					'key' => '_cie_booking_end_date',
+					'value' => $start_date,
+					'compare' => '>=',
+					'type' => 'DATE',
+				],
+				[
+					'key' => '_cie_booking_status',
+					'value' => [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED],
+					'compare' => 'NOT IN',
 				],
 			],
 		]);

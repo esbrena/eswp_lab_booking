@@ -158,14 +158,6 @@ final class Shortcodes {
 				<?php endif; ?>
 
 				<div class="cie-lab-booking__flow" data-cie-booking-flow="1">
-				<div class="cie-lab-booking__steps-indicator">
-					<span>1. <?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></span>
-					<span>2. <?php echo esc_html__('Tipo', 'cie-lab-booking'); ?></span>
-					<span>3. <?php echo esc_html__('Espacios', 'cie-lab-booking'); ?></span>
-					<span>4. <?php echo esc_html__('Equipos', 'cie-lab-booking'); ?></span>
-					<span>5. <?php echo esc_html__('Cursos', 'cie-lab-booking'); ?></span>
-					<span>6. <?php echo esc_html__('Proyecto', 'cie-lab-booking'); ?></span>
-				</div>
 				<fieldset data-cie-step="1" class="cie-step-card">
 					<legend><?php echo esc_html__('1) Seleccione el rango de fechas de la reserva', 'cie-lab-booking'); ?></legend>
 					<p>
@@ -589,16 +581,40 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 
-	public static function render_calendar(): string {
+	public static function render_calendar($atts = []): string {
+		$atts = shortcode_atts(
+			[
+				'calendar' => 'general',
+			],
+			is_array($atts) ? $atts : []
+		);
+		$calendar_mode = sanitize_key((string) ($atts['calendar'] ?? 'general'));
+		if (!in_array($calendar_mode, ['general', 'current_user'], true)) {
+			$calendar_mode = 'general';
+		}
+
 		// Read-only calendar for users: show 3 months starting current month.
 		$start = gmdate('Y-m-01');
 		$end = gmdate('Y-m-d', strtotime('+3 months -1 day', strtotime($start)));
-		$day_map = Bookings::build_day_map($start, $end);
+		if ($calendar_mode === 'current_user') {
+			if (!is_user_logged_in()) {
+				return '<p>' . esc_html__('Debes iniciar sesión para ver tu calendario de reservas.', 'cie-lab-booking') . '</p>';
+			}
+			$day_map = Bookings::build_day_map_for_user($start, $end, get_current_user_id());
+		} else {
+			$day_map = Bookings::build_day_map($start, $end);
+		}
 
 		ob_start();
 		?>
-		<div class="cie-lab-booking">
-			<h3><?php echo esc_html__('Calendario de reservas (solo lectura)', 'cie-lab-booking'); ?></h3>
+		<div class="cie-lab-booking" data-cie-calendar-scope="<?php echo esc_attr($calendar_mode); ?>">
+			<h3>
+				<?php
+				echo $calendar_mode === 'current_user'
+					? esc_html__('Calendario de mis reservas', 'cie-lab-booking')
+					: esc_html__('Calendario de reservas (solo lectura)', 'cie-lab-booking');
+				?>
+			</h3>
 			<?php echo self::render_calendar_months($start, 3, $day_map); ?>
 		</div>
 		<?php
@@ -606,14 +622,7 @@ final class Shortcodes {
 	}
 
 	private static function group_label(string $group): string {
-		$map = [
-			'recording' => __('Equipos de grabación', 'cie-lab-booking'),
-			'phonetics' => __('Equipos de análisis fonético', 'cie-lab-booking'),
-			'eye-tracker' => __('Equipos de eye-tracker', 'cie-lab-booking'),
-			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
-			'other' => __('Otros', 'cie-lab-booking'),
-		];
-		return $map[$group] ?? $group;
+		return Bookings::get_equipment_group_label($group);
 	}
 
 	/**

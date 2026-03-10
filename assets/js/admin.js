@@ -91,18 +91,32 @@
       return map[status] || status || '';
     }
 
-    function fetchDayDetails(date, cb) {
-      if (detailCache[date]) return cb(detailCache[date]);
+    function statusSlug(status) {
+      var map = {
+        pending: 'pending',
+        approved: 'approved',
+        rejected: 'rejected',
+        changes_requested: 'changes',
+        cancelled: 'cancelled',
+      };
+      return map[status] || 'unknown';
+    }
+
+    function fetchDayDetails(date, calendarScope, cb) {
+      var scope = calendarScope || 'general';
+      var cacheKey = date + '|' + scope;
+      if (detailCache[cacheKey]) return cb(detailCache[cacheKey]);
       if (!window.CieLabBookingAdmin || !window.CieLabBookingAdmin.ajaxUrl) return cb(null);
       if (detailXhr && detailXhr.abort) detailXhr.abort();
       detailXhr = $.post(window.CieLabBookingAdmin.ajaxUrl, {
         action: 'cie_lab_booking_day_details',
         nonce: window.CieLabBookingAdmin.nonce,
         date: date,
+        calendar_scope: scope,
       })
         .done(function (res) {
           if (res && res.success && res.data) {
-            detailCache[date] = res.data;
+            detailCache[cacheKey] = res.data;
             cb(res.data);
           } else cb(null);
         })
@@ -170,6 +184,40 @@
       return $m;
     }
 
+    function renderBookingCard(b) {
+      var resources = [];
+      if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
+      if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
+      var primaryResource = resources.length ? resources[0] : 'Reserva';
+      var bookingDates = (b.start_date || '') + ' - ' + (b.end_date || '');
+      var user = b.user ? (b.user.displayName || '') : '';
+      var badges = '';
+      if (b.spaces && b.spaces.length) {
+        badges += '<span class="cie-resource-badge cie-resource-badge--space">Espacio</span>';
+      }
+      if (b.equipment && b.equipment.length) {
+        badges += '<span class="cie-resource-badge cie-resource-badge--equipment">Equipo</span>';
+      }
+      if (b.status) {
+        badges +=
+          '<span class="cie-status-tag cie-status-tag--' +
+          statusSlug(b.status) +
+          '">' +
+          statusLabel(b.status) +
+          '</span>';
+      }
+
+      return (
+        '<article class="cie-cal-booking-card">' +
+          '<div class="cie-cal-booking-card__resource">' + primaryResource + '</div>' +
+          '<div class="cie-cal-booking-card__meta">ID #' + (b.id || '') + ' · ' + bookingDates + (user ? ' · ' + user : '') + '</div>' +
+          '<div class="cie-cal-booking-card__badges">' + badges + '</div>' +
+          (resources.length > 1 ? '<div class="cie-cal-booking-card__extra">' + resources.slice(1).join(', ') + '</div>' : '') +
+          (b.detailUrl ? '<div class="cie-cal-booking-card__actions"><a href="' + b.detailUrl + '">Ver detalle</a></div>' : '') +
+        '</article>'
+      );
+    }
+
     function openModal(date, data) {
       var $m = ensureModal();
       var $c = $m.find('.cie-modal__content');
@@ -183,49 +231,31 @@
 
       var html = '<h2 style="margin-top:0">Detalle de ' + date + '</h2>';
       if (blocks.length) {
-        html += '<h3>Mantenimiento</h3><ul>';
+        html += '<h3>Mantenimiento</h3><div class="cie-cal-block-list">';
         blocks.forEach(function (b) {
           var r = [];
           if (b.isGlobal) r.push('Global');
           if (b.resources && b.resources.length) r = r.concat(b.resources);
           html +=
-            '<li>' +
-            (b.start_date || '') +
-            ' - ' +
-            (b.end_date || '') +
-            (r.length ? ' · ' + r.join(', ') : '') +
-            (b.reason ? ' · ' + b.reason : '') +
-            '</li>';
+            '<article class="cie-cal-block-card">' +
+              '<div><strong>Mantenimiento</strong></div>' +
+              '<div class="cie-cal-muted">' + (b.start_date || '') + ' - ' + (b.end_date || '') + '</div>' +
+              (r.length ? '<div class="cie-cal-block-card__resources">' + r.join(', ') + '</div>' : '') +
+              (b.reason ? '<div class="cie-cal-muted">' + b.reason + '</div>' : '') +
+            '</article>';
         });
-        html += '</ul>';
+        html += '</div>';
       }
 
       html += '<h3>Reservas</h3>';
       if (!bookings.length) {
         html += '<p><em>No hay reservas.</em></p>';
       } else {
-        html += '<ul class="cie-cal-list">';
+        html += '<div class="cie-cal-booking-list">';
         bookings.forEach(function (b) {
-          var resources = [];
-          if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
-          if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
-          var user = b.user ? (b.user.displayName || '') : '';
-          html +=
-            '<li>' +
-            '<div><strong>' +
-            (b.start_date || '') +
-            ' - ' +
-            (b.end_date || '') +
-            '</strong></div>' +
-            '<div class="cie-cal-muted">' +
-            (statusLabel(b.status) ? statusLabel(b.status) + ' · ' : '') +
-            (user ? user + ' · ' : '') +
-            (resources.length ? resources.join(', ') : 'Reservado') +
-            '</div>' +
-            (b.detailUrl ? '<div><a href="' + b.detailUrl + '">Ver detalle</a></div>' : '') +
-            '</li>';
+          html += renderBookingCard(b);
         });
-        html += '</ul>';
+        html += '</div>';
       }
       $c.html(html);
       $m.show();
@@ -234,10 +264,11 @@
     $(document).on('mouseenter', '.cie-calendar-day[data-cie-date]', function (e) {
       var date = $(this).data('cie-date');
       if (!date) return;
+      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
       var $t = ensureTooltip();
       $t.text('Cargando...').show();
       $t.css({ left: e.pageX + 12, top: e.pageY + 12, position: 'absolute' });
-      fetchDayDetails(date, function (data) {
+      fetchDayDetails(date, scope, function (data) {
         renderTooltip(date, data);
       });
     });
@@ -254,7 +285,8 @@
     $(document).on('click', '.cie-calendar-day[data-cie-date]', function () {
       var date = $(this).data('cie-date');
       if (!date) return;
-      fetchDayDetails(date, function (data) {
+      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
+      fetchDayDetails(date, scope, function (data) {
         openModal(date, data);
       });
     });
