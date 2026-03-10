@@ -2,8 +2,24 @@
   $(function () {
     var $root = $('.cie-lab-booking');
     var $flow = $root.find('.cie-lab-booking__flow[data-cie-booking-flow="1"]');
-    var $start = $root.find('input.cie-date[name="start_date"]');
-    var $end = $root.find('input.cie-date[name="end_date"]');
+    var $range = $root.find('input.cie-date-range[name="booking_range"]');
+    var $start = $root.find('input[type="hidden"][name="start_date"]');
+    var $end = $root.find('input[type="hidden"][name="end_date"]');
+
+    function formatDateYmd(dateObj) {
+      if (!dateObj || !(dateObj instanceof Date)) return '';
+      var y = dateObj.getFullYear();
+      var m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      var d = String(dateObj.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + d;
+    }
+
+    var todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    var maxSelectableDate = new Date(todayDate.getTime());
+    maxSelectableDate.setMonth(maxSelectableDate.getMonth() + 3);
+    var todayYmd = formatDateYmd(todayDate);
+    var maxSelectableYmd = formatDateYmd(maxSelectableDate);
 
     function setupFlatpickr($el, opts) {
       if (!$el.length || !window.flatpickr) return null;
@@ -13,27 +29,20 @@
     // Flatpickr locale.
     var fpLocale = (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : null;
 
-    var startFp = setupFlatpickr($start, {
+    var rangeFp = setupFlatpickr($range, {
+      mode: 'range',
       dateFormat: 'Y-m-d',
       locale: fpLocale || 'default',
       disableMobile: true,
       altInput: true,
       altFormat: 'd/m/Y',
-      onChange: function (selectedDates, dateStr) {
-        if (endFp && dateStr) endFp.set('minDate', dateStr);
-        updateFlow();
-      },
-      showMonths: 3,
-    });
-
-    var endFp = setupFlatpickr($end, {
-      dateFormat: 'Y-m-d',
-      locale: fpLocale || 'default',
-      disableMobile: true,
-      altInput: true,
-      altFormat: 'd/m/Y',
-      onChange: function (selectedDates, dateStr) {
-        if (startFp && dateStr) startFp.set('maxDate', dateStr);
+      minDate: todayYmd,
+      maxDate: maxSelectableYmd,
+      onChange: function (selectedDates, dateStr, instance) {
+        var startDate = selectedDates[0] ? instance.formatDate(selectedDates[0], 'Y-m-d') : '';
+        var endDate = selectedDates[1] ? instance.formatDate(selectedDates[1], 'Y-m-d') : '';
+        $start.val(startDate);
+        $end.val(endDate);
         updateFlow();
       },
       showMonths: 3,
@@ -58,6 +67,15 @@
       return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
     }
 
+    function isProjectComplete() {
+      var name = ($flow.find('input[name="project_name"]').val() || '').toString().trim();
+      var duration = ($flow.find('input[name="project_duration"]').val() || '').toString().trim();
+      var responsible = ($flow.find('input[name="project_responsible"]').val() || '').toString().trim();
+      var email = ($flow.find('input[name="project_ip_email"]').val() || '').toString().trim();
+      var emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      return !!name && !!duration && !!responsible && emailOk;
+    }
+
     function toggleStep(step, on) {
       var $fs = $flow.find('fieldset[data-cie-step="' + step + '"]');
       if (!$fs.length) return;
@@ -66,9 +84,21 @@
       $fs.find('input,select,textarea,button').prop('disabled', !on);
     }
 
-    function setSubmitEnabled(enabled) {
+    function setSubmitState(enabled) {
       var $btn = $flow.find('[data-cie-submit]');
+      var $wrap = $flow.find('[data-cie-submit-wrap]');
       if ($btn.length) $btn.prop('disabled', !enabled);
+      if ($wrap.length) $wrap.toggle(!!enabled);
+    }
+
+    if (rangeFp) {
+      var presetStart = ymd($start);
+      var presetEnd = ymd($end);
+      if (presetStart && presetEnd) {
+        rangeFp.setDate([presetStart, presetEnd], false, 'Y-m-d');
+      } else if (presetStart) {
+        rangeFp.setDate([presetStart], false, 'Y-m-d');
+      }
     }
 
     var availabilityCache = {};
@@ -81,7 +111,10 @@
         cb(availabilityCache[cacheKey]);
         return;
       }
-      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) return;
+      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
+        cb(null);
+        return;
+      }
 
       if (availabilityXhr && availabilityXhr.abort) availabilityXhr.abort();
 
@@ -154,7 +187,9 @@
 
       var start = ymd($start);
       var end = ymd($end);
-      var datesOk = !!start && !!end && end >= start;
+      var hasCompleteRange = !!start && !!end && end >= start;
+      var inAllowedWindow = hasCompleteRange && start >= todayYmd && end <= maxSelectableYmd;
+      var datesOk = hasCompleteRange && inAllowedWindow;
 
       var useSpace = $flow.find('input[name="use_space"]').is(':checked');
       var useEq = $flow.find('input[name="use_equipment"]').is(':checked');
@@ -164,13 +199,19 @@
       toggleStep(4, datesOk && useEq);
 
       if (!datesOk) {
-        showNotice('dates', '', 'info');
+        if (!!start && !!end && end < start) {
+          showNotice('dates', 'La fecha final no puede ser anterior a la inicial.', 'error');
+        } else if (!!start && !!end && !inAllowedWindow) {
+          showNotice('dates', 'Solo se permiten fechas desde hoy y dentro de los próximos 3 meses.', 'error');
+        } else {
+          showNotice('dates', '', 'info');
+        }
         showNotice('spaces', '', 'info');
         showNotice('equipment', '', 'info');
         showNotice('courses', '', 'info');
         toggleStep(5, false);
         toggleStep(6, false);
-        setSubmitEnabled(false);
+        setSubmitState(false);
         return;
       }
 
@@ -178,7 +219,7 @@
         showNotice('type', 'Seleccione el tipo de instalación que quiere usar (espacios y/o equipos).', 'info');
         toggleStep(5, false);
         toggleStep(6, false);
-        setSubmitEnabled(false);
+        setSubmitState(false);
       } else {
         showNotice('type', '', 'info');
       }
@@ -259,7 +300,7 @@
           if (!canProceed) {
             showNotice('courses', '', 'info');
             toggleStep(6, false);
-            setSubmitEnabled(false);
+            setSubmitState(false);
             return;
           }
 
@@ -270,25 +311,25 @@
               'error'
             );
             toggleStep(6, false);
-            setSubmitEnabled(false);
+            setSubmitState(false);
             return;
           }
 
           if (courses === 'yes') {
             showNotice('courses', '', 'info');
             toggleStep(6, true);
-            setSubmitEnabled(true);
+            setSubmitState(isProjectComplete());
           } else {
             showNotice('courses', '', 'info');
             toggleStep(6, false);
-            setSubmitEnabled(false);
+            setSubmitState(false);
           }
         });
       }, 250);
     }
 
     // Bind changes.
-    $flow.on('change', 'input', updateFlow);
+    $flow.on('change input', 'input,select,textarea', updateFlow);
 
     // Init.
     // Hide later steps by default until the logic enables them.
@@ -296,7 +337,7 @@
     toggleStep(4, false);
     toggleStep(5, false);
     toggleStep(6, false);
-    setSubmitEnabled(false);
+    setSubmitState(false);
     updateFlow();
 
     // Calendar hover/click details (front + admin calendar shortcode rendered on front).

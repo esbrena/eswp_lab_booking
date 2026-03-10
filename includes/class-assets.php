@@ -81,8 +81,14 @@ final class Assets {
 	}
 
 	public static function enqueue_admin(string $hook_suffix): void {
-		// Only on our pages.
-		if (strpos($hook_suffix, 'cie-lab-booking') === false && strpos($hook_suffix, Post_Types::CPT_BOOKING) === false) {
+		$screen = function_exists('get_current_screen') ? get_current_screen() : null;
+		$is_plugin_page = strpos($hook_suffix, 'cie-lab-booking') !== false;
+		$is_cie_post_type = $screen
+			&& isset($screen->post_type)
+			&& in_array((string) $screen->post_type, [Post_Types::CPT_BOOKING, Post_Types::CPT_RESOURCE, Post_Types::CPT_BLOCK], true);
+
+		// Only on our admin pages and post types.
+		if (!$is_plugin_page && !$is_cie_post_type) {
 			return;
 		}
 

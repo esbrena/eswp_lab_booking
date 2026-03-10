@@ -234,6 +234,70 @@
   color: #334155;
 }
 
+.cie-lab-booking__flow {
+  display: grid;
+  gap: 12px;
+}
+
+.cie-lab-booking__steps-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.cie-lab-booking__steps-indicator span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #dbe3ef;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+.cie-step-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 12px;
+}
+
+.cie-step-card legend {
+  font-weight: 800;
+  color: #0f172a;
+  padding: 0 6px;
+}
+
+.cie-step-card input[type='text'],
+.cie-step-card input[type='email'],
+.cie-step-card input.cie-date-range {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff;
+}
+
+.cie-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  margin: 6px 0;
+}
+
+.cie-option small {
+  color: #64748b;
+}
+
+.cie-lab-booking__submit {
+  margin-top: 2px;
+}
+
 .cie-lab-booking__notice {
   margin-top: 8px;
   padding: 8px 10px;

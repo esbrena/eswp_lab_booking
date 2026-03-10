@@ -14,22 +14,30 @@ final class Admin {
 
 		add_filter('manage_' . Post_Types::CPT_BOOKING . '_posts_columns', [self::class, 'booking_columns']);
 		add_action('manage_' . Post_Types::CPT_BOOKING . '_posts_custom_column', [self::class, 'booking_column_content'], 10, 2);
+		add_filter('manage_' . Post_Types::CPT_RESOURCE . '_posts_columns', [self::class, 'resource_columns']);
+		add_action('manage_' . Post_Types::CPT_RESOURCE . '_posts_custom_column', [self::class, 'resource_column_content'], 10, 2);
+		add_filter('manage_' . Post_Types::CPT_BLOCK . '_posts_columns', [self::class, 'block_columns']);
+		add_action('manage_' . Post_Types::CPT_BLOCK . '_posts_custom_column', [self::class, 'block_column_content'], 10, 2);
+
+		add_action('restrict_manage_posts', [self::class, 'render_list_filters']);
+		add_action('pre_get_posts', [self::class, 'apply_list_filters']);
+
 		add_filter('post_row_actions', [self::class, 'booking_row_actions'], 10, 2);
 	}
 
 	public static function register_menu(): void {
 		add_menu_page(
-			__('CIE - Reservas', 'cie-lab-booking'),
-			__('CIE - Reservas', 'cie-lab-booking'),
+			__('Calendario y reservas', 'cie-lab-booking'),
+			__('Calendario y reservas', 'cie-lab-booking'),
 			'manage_options',
-			'cie-lab-booking',
-			[self::class, 'render_dashboard'],
+			'cie-lab-booking-calendar',
+			[self::class, 'render_calendar'],
 			'dashicons-calendar-alt',
 			26
 		);
 
 		add_submenu_page(
-			'cie-lab-booking',
+			'cie-lab-booking-calendar',
 			__('Calendario y reservas', 'cie-lab-booking'),
 			__('Calendario y reservas', 'cie-lab-booking'),
 			'manage_options',
@@ -38,7 +46,16 @@ final class Admin {
 		);
 
 		add_submenu_page(
-			'cie-lab-booking',
+			'cie-lab-booking-calendar',
+			__('Ajustes y notificaciones', 'cie-lab-booking'),
+			__('Ajustes y notificaciones', 'cie-lab-booking'),
+			'manage_options',
+			'cie-lab-booking-settings',
+			[self::class, 'render_dashboard']
+		);
+
+		add_submenu_page(
+			'cie-lab-booking-calendar',
 			__('Reservas', 'cie-lab-booking'),
 			__('Reservas', 'cie-lab-booking'),
 			'manage_options',
@@ -46,7 +63,7 @@ final class Admin {
 		);
 
 		add_submenu_page(
-			'cie-lab-booking',
+			'cie-lab-booking-calendar',
 			__('Recursos', 'cie-lab-booking'),
 			__('Recursos', 'cie-lab-booking'),
 			'manage_options',
@@ -54,7 +71,7 @@ final class Admin {
 		);
 
 		add_submenu_page(
-			'cie-lab-booking',
+			'cie-lab-booking-calendar',
 			__('Bloqueos', 'cie-lab-booking'),
 			__('Bloqueos', 'cie-lab-booking'),
 			'manage_options',
@@ -96,8 +113,8 @@ final class Admin {
 		$current_email = trim((string) get_option(Mailer::OPTION_NOTIFICATION_EMAIL, ''));
 		$default_admin_email = trim((string) get_option('admin_email', ''));
 
-		echo '<div class="wrap"><h1>' . esc_html__('CIE - Reservas', 'cie-lab-booking') . '</h1>';
-		echo '<p>' . esc_html__('Desde aquí puedes gestionar el calendario y las reservas.', 'cie-lab-booking') . '</p>';
+		echo '<div class="wrap"><h1>' . esc_html__('Ajustes de reservas', 'cie-lab-booking') . '</h1>';
+		echo '<p>' . esc_html__('Configura las notificaciones del sistema de reservas.', 'cie-lab-booking') . '</p>';
 
 		echo '<hr/>';
 		echo '<h2>' . esc_html__('Notificaciones', 'cie-lab-booking') . '</h2>';
@@ -132,7 +149,10 @@ final class Admin {
 			$start = Util::normalize_date_ymd((string) ($_POST['block_start_date'] ?? ''));
 			$end = Util::normalize_date_ymd((string) ($_POST['block_end_date'] ?? ''));
 			$reason = sanitize_text_field((string) ($_POST['block_reason'] ?? ''));
-			$resource_ids = array_values(array_filter(array_map('intval', (array) ($_POST['block_resource_ids'] ?? []))));
+			$block_all = !empty($_POST['block_all_resources']);
+			$resource_ids = $block_all
+				? []
+				: array_values(array_filter(array_map('intval', (array) ($_POST['block_resource_ids'] ?? []))));
 
 			if (!$start || !$end || $end < $start) {
 				Util::admin_notice(__('Fechas de bloqueo inválidas.', 'cie-lab-booking'), 'error');
@@ -159,30 +179,34 @@ final class Admin {
 		if (!preg_match('/^\d{4}\-\d{2}$/', $month)) {
 			$month = gmdate('Y-m');
 		}
+		$booking_status_filter = isset($_GET['booking_status']) ? sanitize_key((string) $_GET['booking_status']) : '';
 
 		// Admin calendar: show 3 months (same as front), starting from selected month.
 		$start = $month . '-01';
 		$end = gmdate('Y-m-d', strtotime('+3 months -1 day', strtotime($start)));
 		$day_map = Bookings::build_day_map($start, $end);
 
-		$pending = get_posts([
+		$bookings_query = [
 			'post_type' => Post_Types::CPT_BOOKING,
 			'post_status' => 'publish',
 			'posts_per_page' => 20,
 			'orderby' => 'date',
 			'order' => 'DESC',
-			'meta_query' => [
+		];
+		if ($booking_status_filter !== '') {
+			$bookings_query['meta_query'] = [
 				[
 					'key' => '_cie_booking_status',
-					'value' => Post_Types::BOOKING_STATUS_PENDING,
+					'value' => $booking_status_filter,
 				],
-			],
-		]);
+			];
+		}
+		$bookings = get_posts($bookings_query);
 
 		echo '<div class="wrap"><h1>' . esc_html__('Calendario y reservas', 'cie-lab-booking') . '</h1>';
 
 		// Month selector (up to 24 months ahead).
-		echo '<form method="get" style="margin:12px 0;">';
+		echo '<form method="get" class="cie-admin-calendar-toolbar">';
 		echo '<input type="hidden" name="page" value="cie-lab-booking-calendar" />';
 		echo '<label>' . esc_html__('Mes', 'cie-lab-booking') . ' ';
 		echo '<select name="month">';
@@ -198,8 +222,20 @@ final class Admin {
 			);
 		}
 		echo '</select></label> ';
+		echo '<label>' . esc_html__('Estado reserva', 'cie-lab-booking') . ' ';
+		echo '<select name="booking_status">';
+		printf('<option value="">%s</option>', esc_html__('Todos', 'cie-lab-booking'));
+		printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_PENDING), selected($booking_status_filter, Post_Types::BOOKING_STATUS_PENDING, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_PENDING)));
+		printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_APPROVED), selected($booking_status_filter, Post_Types::BOOKING_STATUS_APPROVED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_APPROVED)));
+		printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_CHANGES), selected($booking_status_filter, Post_Types::BOOKING_STATUS_CHANGES, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_CHANGES)));
+		printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_REJECTED), selected($booking_status_filter, Post_Types::BOOKING_STATUS_REJECTED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_REJECTED)));
+		printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_CANCELLED), selected($booking_status_filter, Post_Types::BOOKING_STATUS_CANCELLED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_CANCELLED)));
+		echo '</select></label> ';
 		echo '<button class="button">' . esc_html__('Ver', 'cie-lab-booking') . '</button>';
 		echo '</form>';
+
+		echo '<div class="cie-admin-calendar-layout">';
+		echo '<section class="cie-admin-calendar-layout__left">';
 
 		// Legend.
 		echo '<div class="cie-lab-booking-admin__legend">';
@@ -212,27 +248,42 @@ final class Admin {
 
 		// Calendar for 3 months (like front).
 		echo self::render_calendar_months($start, 3, $day_map);
+		echo '</section>';
 
-		// Pending list.
-		echo '<h2>' . esc_html__('Reservas pendientes de validar', 'cie-lab-booking') . '</h2>';
-		if (!$pending) {
-			echo '<p><em>' . esc_html__('No hay reservas pendientes.', 'cie-lab-booking') . '</em></p>';
+		echo '<aside class="cie-admin-calendar-layout__right">';
+		echo '<section class="cie-admin-panel">';
+		echo '<h2>' . esc_html__('Reservas recientes', 'cie-lab-booking') . '</h2>';
+		if (!$bookings) {
+			echo '<p><em>' . esc_html__('No hay reservas para el filtro seleccionado.', 'cie-lab-booking') . '</em></p>';
 		} else {
-			echo '<ul>';
-			foreach ($pending as $b) {
+			echo '<table class="widefat striped cie-admin-mini-table">';
+			echo '<thead><tr>';
+			echo '<th>' . esc_html__('Fechas', 'cie-lab-booking') . '</th>';
+			echo '<th>' . esc_html__('Estado', 'cie-lab-booking') . '</th>';
+			echo '<th>' . esc_html__('Usuario', 'cie-lab-booking') . '</th>';
+			echo '<th>' . esc_html__('Recursos', 'cie-lab-booking') . '</th>';
+			echo '</tr></thead><tbody>';
+			foreach ($bookings as $b) {
 				$link = admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . (int) $b->ID);
 				$start_b = (string) get_post_meta($b->ID, '_cie_booking_start_date', true);
 				$end_b = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
-				printf(
-					'<li><a href="%1$s">%2$s</a> <small>(%3$s - %4$s)</small></li>',
-					esc_url($link),
-					esc_html($b->post_title),
-					esc_html($start_b),
-					esc_html($end_b)
+				$status = (string) get_post_meta($b->ID, '_cie_booking_status', true);
+				$user = get_user_by('id', (int) $b->post_author);
+				$user_name = $user ? (string) $user->display_name : (string) $b->post_author;
+				$resources = self::resources_summary(
+					(array) get_post_meta((int) $b->ID, '_cie_booking_spaces', true),
+					(array) get_post_meta((int) $b->ID, '_cie_booking_equipment', true)
 				);
+				echo '<tr>';
+				echo '<td><a href="' . esc_url($link) . '">' . esc_html($start_b . ' - ' . $end_b) . '</a><br/><small>' . esc_html($b->post_title) . '</small></td>';
+				echo '<td>' . self::status_badge($status) . '<br/>' . self::activity_badge((int) $b->ID) . '</td>';
+				echo '<td>' . esc_html($user_name) . '</td>';
+				echo '<td>' . esc_html($resources) . '</td>';
+				echo '</tr>';
 			}
-			echo '</ul>';
+			echo '</tbody></table>';
 		}
+		echo '</section>';
 
 		// Quick block form.
 		$resources = get_posts([
@@ -242,6 +293,7 @@ final class Admin {
 			'orderby' => 'title',
 			'order' => 'ASC',
 		]);
+		echo '<section class="cie-admin-panel">';
 		echo '<h2>' . esc_html__('Crear bloqueo por mantenimiento', 'cie-lab-booking') . '</h2>';
 		echo '<form method="post">';
 		wp_nonce_field('cie_block_submit', '_wpnonce_cie_block');
@@ -249,14 +301,26 @@ final class Admin {
 		echo '<p><label>' . esc_html__('Desde', 'cie-lab-booking') . ' <input class="cie-date" type="text" name="block_start_date" placeholder="YYYY-MM-DD" required /></label></p>';
 		echo '<p><label>' . esc_html__('Hasta', 'cie-lab-booking') . ' <input class="cie-date" type="text" name="block_end_date" placeholder="YYYY-MM-DD" required /></label></p>';
 		echo '<p><label>' . esc_html__('Motivo', 'cie-lab-booking') . '<br/><input type="text" name="block_reason" style="width:420px" /></label></p>';
-		echo '<p><label>' . esc_html__('Recursos afectados (vacío = todos)', 'cie-lab-booking') . '<br/>';
-		echo '<select name="block_resource_ids[]" multiple size="6" style="min-width:420px;">';
+		echo '<label class="cie-admin-toggle">';
+		echo '<input type="checkbox" name="block_all_resources" value="1" data-cie-all-toggle="1" /> ';
+		echo esc_html__('Bloquear todos los recursos', 'cie-lab-booking');
+		echo '</label>';
+		echo '<div class="cie-admin-resource-picker" data-cie-resource-picker="1">';
+		echo '<p><strong>' . esc_html__('Selección manual de recursos', 'cie-lab-booking') . '</strong></p>';
 		foreach ($resources as $r) {
-			printf('<option value="%1$d">%2$s</option>', (int) $r->ID, esc_html($r->post_title));
+			printf(
+				'<label><input type="checkbox" name="block_resource_ids[]" value="%1$d" /> %2$s <small>(%3$s)</small></label>',
+				(int) $r->ID,
+				esc_html($r->post_title),
+				esc_html(self::resource_kind_label((string) get_post_meta((int) $r->ID, '_cie_resource_kind', true)))
+			);
 		}
-		echo '</select></label></p>';
+		echo '</div>';
 		echo '<p><button class="button button-primary">' . esc_html__('Crear bloqueo', 'cie-lab-booking') . '</button></p>';
 		echo '</form>';
+		echo '</section>';
+		echo '</aside>';
+		echo '</div>';
 
 		echo '</div>';
 	}
@@ -293,7 +357,7 @@ final class Admin {
 			$message = sanitize_textarea_field((string) ($_POST['cie_booking_admin_message'] ?? ''));
 
 			if ($action === 'approve') {
-				$conflicts = Bookings::find_conflicts($start, $end, array_map('intval', $spaces), array_map('intval', $equipment));
+				$conflicts = Bookings::find_conflicts($start, $end, array_map('intval', $spaces), array_map('intval', $equipment), $booking_id);
 				if (!empty($conflicts['spaces']) || !empty($conflicts['equipment']) || !empty($conflicts['blocked'])) {
 					Util::admin_notice(__('La reserva no puede validarse porque entra en conflicto con reservas ya validadas o con un bloqueo de mantenimiento.', 'cie-lab-booking'), 'error');
 				} else {
@@ -434,16 +498,47 @@ final class Admin {
 		$group = (string) get_post_meta($post->ID, '_cie_resource_group', true);
 		$code = (string) get_post_meta($post->ID, '_cie_resource_code', true);
 		$available = (string) get_post_meta($post->ID, '_cie_resource_available', true);
+		$quantity = (int) get_post_meta($post->ID, '_cie_resource_quantity', true);
+		if ($quantity < 1) {
+			$quantity = 1;
+		}
+
+		$groups = Bookings::get_equipment_groups();
+		if ($group !== '' && !in_array($group, $groups, true)) {
+			$groups[] = $group;
+			sort($groups);
+		}
+		$group_existing = in_array($group, $groups, true) ? $group : '';
+		$group_new = $group_existing === '' ? $group : '';
 
 		echo '<p><label>' . esc_html__('Tipo', 'cie-lab-booking') . ' ';
-		echo '<select name="cie_resource_kind">';
+		echo '<select name="cie_resource_kind" data-cie-resource-kind="1">';
 		printf('<option value="space" %s>%s</option>', selected($kind, 'space', false), esc_html__('Espacio', 'cie-lab-booking'));
 		printf('<option value="equipment" %s>%s</option>', selected($kind, 'equipment', false), esc_html__('Equipo', 'cie-lab-booking'));
 		echo '</select></label></p>';
 
-		echo '<p><label>' . esc_html__('Grupo', 'cie-lab-booking') . ' ';
-		printf('<input type="text" name="cie_resource_group" value="%s" />', esc_attr($group));
+		echo '<div data-cie-resource-group-wrap="1">';
+		echo '<p><label>' . esc_html__('Grupo de equipo', 'cie-lab-booking') . ' ';
+		echo '<select name="cie_resource_group_existing" data-cie-resource-group-existing="1">';
+		echo '<option value="">' . esc_html__('Seleccione un grupo', 'cie-lab-booking') . '</option>';
+		foreach ($groups as $g) {
+			printf(
+				'<option value="%1$s" %2$s>%3$s</option>',
+				esc_attr($g),
+				selected($group_existing, $g, false),
+				esc_html(self::equipment_group_label($g))
+			);
+		}
+		echo '<option value="__new__"' . selected($group_existing === '' && $group_new !== '', true, false) . '>' . esc_html__('Crear grupo nuevo…', 'cie-lab-booking') . '</option>';
+		echo '</select></label></p>';
+		echo '<p><label>' . esc_html__('Nuevo grupo', 'cie-lab-booking') . ' ';
+		printf('<input type="text" name="cie_resource_group_new" value="%s" placeholder="%s" />', esc_attr($group_new), esc_attr__('Ej.: microscopios', 'cie-lab-booking'));
 		echo '</label></p>';
+		echo '</div>';
+
+		echo '<p data-cie-resource-quantity-wrap="1"><label>' . esc_html__('Cantidad disponible', 'cie-lab-booking') . ' ';
+		printf('<input type="number" name="cie_resource_quantity" min="1" step="1" value="%d" />', (int) $quantity);
+		echo '</label> <small>' . esc_html__('Para equipos: cuántas unidades del mismo equipo hay disponibles.', 'cie-lab-booking') . '</small></p>';
 
 		echo '<p><label>' . esc_html__('Código/ID', 'cie-lab-booking') . ' ';
 		printf('<input type="text" name="cie_resource_code" value="%s" />', esc_attr($code));
@@ -453,6 +548,30 @@ final class Admin {
 		printf('<input type="checkbox" name="cie_resource_available" value="1" %s /> ', checked($available, '1', false));
 		echo esc_html__('Disponible', 'cie-lab-booking');
 		echo '</label></p>';
+
+		$history = Bookings::get_resource_booking_history((int) $post->ID, 80);
+		echo '<hr/>';
+		echo '<h3>' . esc_html__('Histórico de reservas de este recurso', 'cie-lab-booking') . '</h3>';
+		if (!$history) {
+			echo '<p><em>' . esc_html__('Sin reservas todavía.', 'cie-lab-booking') . '</em></p>';
+			return;
+		}
+
+		echo '<table class="widefat striped cie-admin-mini-table"><thead><tr>';
+		echo '<th>' . esc_html__('Fechas', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Usuario', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Estado', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Reserva', 'cie-lab-booking') . '</th>';
+		echo '</tr></thead><tbody>';
+		foreach ($history as $item) {
+			echo '<tr>';
+			echo '<td>' . esc_html($item['start_date'] . ' - ' . $item['end_date']) . '</td>';
+			echo '<td>' . esc_html($item['user_name']) . '</td>';
+			echo '<td>' . self::status_badge((string) $item['status']) . '<br/>' . ($item['is_active'] ? '<span class="cie-admin-badge is-active">' . esc_html__('Activa hoy', 'cie-lab-booking') . '</span>' : '') . '</td>';
+			echo '<td><a href="' . esc_url((string) $item['detail_url']) . '">' . esc_html__('Ver reserva', 'cie-lab-booking') . '</a></td>';
+			echo '</tr>';
+		}
+		echo '</tbody></table>';
 	}
 
 	public static function render_block_meta_box(\WP_Post $post): void {
@@ -461,6 +580,7 @@ final class Admin {
 		$end = (string) get_post_meta($post->ID, '_cie_block_end_date', true);
 		$reason = (string) get_post_meta($post->ID, '_cie_block_reason', true);
 		$resource_ids = (array) get_post_meta($post->ID, '_cie_block_resource_ids', true);
+		$is_global = empty($resource_ids);
 
 		$resources = get_posts([
 			'post_type' => Post_Types::CPT_RESOURCE,
@@ -482,13 +602,23 @@ final class Admin {
 		printf('<input type="text" name="cie_block_reason" style="width:520px" value="%s" />', esc_attr($reason));
 		echo '</label></p>';
 
-		echo '<p><label>' . esc_html__('Recursos afectados (vacío = todos)', 'cie-lab-booking') . '<br/>';
-		echo '<select name="cie_block_resource_ids[]" multiple size="8" style="min-width:520px;">';
+		echo '<label class="cie-admin-toggle">';
+		printf('<input type="checkbox" name="cie_block_all_resources" value="1" data-cie-all-toggle="1" %s /> ', checked($is_global, true, false));
+		echo esc_html__('Bloquear todos los recursos', 'cie-lab-booking');
+		echo '</label>';
+		echo '<div class="cie-admin-resource-picker" data-cie-resource-picker="1">';
+		echo '<p><strong>' . esc_html__('Selección manual de recursos', 'cie-lab-booking') . '</strong></p>';
 		foreach ($resources as $r) {
 			$selected = in_array((string) $r->ID, array_map('strval', $resource_ids), true);
-			printf('<option value="%1$d" %2$s>%3$s</option>', (int) $r->ID, $selected ? 'selected' : '', esc_html($r->post_title));
+			printf(
+				'<label><input type="checkbox" name="cie_block_resource_ids[]" value="%1$d" %2$s /> %3$s <small>(%4$s)</small></label>',
+				(int) $r->ID,
+				$selected ? 'checked' : '',
+				esc_html($r->post_title),
+				esc_html(self::resource_kind_label((string) get_post_meta((int) $r->ID, '_cie_resource_kind', true)))
+			);
 		}
-		echo '</select></label></p>';
+		echo '</div>';
 	}
 
 	public static function render_booking_meta_box(\WP_Post $post): void {
@@ -517,7 +647,7 @@ final class Admin {
 
 		$conflicts = [];
 		if ($start && $end && $end >= $start) {
-			$conf = Bookings::find_conflicts($start, $end, array_map('intval', (array) $spaces), array_map('intval', (array) $equipment));
+			$conf = Bookings::find_conflicts($start, $end, array_map('intval', (array) $spaces), array_map('intval', (array) $equipment), $booking_id);
 			if (!empty($conf['spaces']) || !empty($conf['equipment']) || !empty($conf['blocked'])) {
 				$conflicts = $conf;
 			}
@@ -614,14 +744,34 @@ final class Admin {
 			}
 
 			$kind = sanitize_key((string) ($_POST['cie_resource_kind'] ?? ''));
-			$group = sanitize_key((string) ($_POST['cie_resource_group'] ?? ''));
+			$group_existing = sanitize_key((string) ($_POST['cie_resource_group_existing'] ?? ''));
+			$group_new = sanitize_title((string) ($_POST['cie_resource_group_new'] ?? ''));
+			$group = '';
+			if ($kind === 'equipment') {
+				if ($group_new !== '') {
+					$group = $group_new;
+				} elseif ($group_existing !== '' && $group_existing !== '__new__') {
+					$group = $group_existing;
+				}
+				if ($group === '') {
+					$group = 'other';
+				}
+			}
+			if ($kind === 'space' && $group === '') {
+				$group = 'spaces';
+			}
 			$code = sanitize_text_field((string) ($_POST['cie_resource_code'] ?? ''));
 			$available = !empty($_POST['cie_resource_available']) ? '1' : '0';
+			$quantity = max(1, (int) ($_POST['cie_resource_quantity'] ?? 1));
+			if ($kind !== 'equipment') {
+				$quantity = 1;
+			}
 
 			update_post_meta($post_id, '_cie_resource_kind', $kind);
 			update_post_meta($post_id, '_cie_resource_group', $group);
 			update_post_meta($post_id, '_cie_resource_code', $code);
 			update_post_meta($post_id, '_cie_resource_available', $available);
+			update_post_meta($post_id, '_cie_resource_quantity', $quantity);
 		}
 
 		if ($post->post_type === Post_Types::CPT_BLOCK) {
@@ -632,7 +782,10 @@ final class Admin {
 			$start = Util::normalize_date_ymd((string) ($_POST['cie_block_start_date'] ?? ''));
 			$end = Util::normalize_date_ymd((string) ($_POST['cie_block_end_date'] ?? ''));
 			$reason = sanitize_text_field((string) ($_POST['cie_block_reason'] ?? ''));
-			$resource_ids = array_values(array_filter(array_map('intval', (array) ($_POST['cie_block_resource_ids'] ?? []))));
+			$block_all = !empty($_POST['cie_block_all_resources']);
+			$resource_ids = $block_all
+				? []
+				: array_values(array_filter(array_map('intval', (array) ($_POST['cie_block_resource_ids'] ?? []))));
 
 			if ($start) {
 				update_post_meta($post_id, '_cie_block_start_date', $start);
@@ -697,7 +850,7 @@ final class Admin {
 			$start_eff = $start ?: (string) get_post_meta($post_id, '_cie_booking_start_date', true);
 			$end_eff = $end ?: (string) get_post_meta($post_id, '_cie_booking_end_date', true);
 			if ($status === Post_Types::BOOKING_STATUS_APPROVED && $start_eff && $end_eff && $end_eff >= $start_eff) {
-				$conf = Bookings::find_conflicts($start_eff, $end_eff, $spaces, $equipment);
+				$conf = Bookings::find_conflicts($start_eff, $end_eff, $spaces, $equipment, $post_id);
 				if (!empty($conf['spaces']) || !empty($conf['equipment']) || !empty($conf['blocked'])) {
 					$status = Post_Types::BOOKING_STATUS_PENDING;
 				}
@@ -712,6 +865,7 @@ final class Admin {
 		$cols['cb'] = $columns['cb'] ?? '';
 		$cols['title'] = __('Reserva', 'cie-lab-booking');
 		$cols['cie_dates'] = __('Fechas', 'cie-lab-booking');
+		$cols['cie_active'] = __('Actividad', 'cie-lab-booking');
 		$cols['cie_resources'] = __('Recursos', 'cie-lab-booking');
 		$cols['cie_status'] = __('Estado', 'cie-lab-booking');
 		$cols['author'] = __('Usuario', 'cie-lab-booking');
@@ -727,7 +881,10 @@ final class Admin {
 		}
 		if ($column === 'cie_status') {
 			$status = (string) get_post_meta($post_id, '_cie_booking_status', true);
-			echo esc_html(self::status_label($status));
+			echo self::status_badge($status);
+		}
+		if ($column === 'cie_active') {
+			echo self::activity_badge($post_id);
 		}
 		if ($column === 'cie_resources') {
 			$spaces = (array) get_post_meta($post_id, '_cie_booking_spaces', true);
@@ -743,6 +900,303 @@ final class Admin {
 		$link = admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . (int) $post->ID);
 		$actions['cie_review'] = '<a href="' . esc_url($link) . '">' . esc_html__('Revisar', 'cie-lab-booking') . '</a>';
 		return $actions;
+	}
+
+	public static function resource_columns(array $columns): array {
+		$cols = [];
+		$cols['cb'] = $columns['cb'] ?? '';
+		$cols['title'] = __('Recurso', 'cie-lab-booking');
+		$cols['cie_resource_kind'] = __('Tipo', 'cie-lab-booking');
+		$cols['cie_resource_group'] = __('Grupo', 'cie-lab-booking');
+		$cols['cie_resource_quantity'] = __('Cantidad', 'cie-lab-booking');
+		$cols['cie_resource_stock'] = __('Stock hoy', 'cie-lab-booking');
+		$cols['cie_resource_reserved_by'] = __('Reservado por', 'cie-lab-booking');
+		$cols['date'] = $columns['date'] ?? __('Fecha', 'cie-lab-booking');
+		return $cols;
+	}
+
+	public static function resource_column_content(string $column, int $post_id): void {
+		$kind = (string) get_post_meta($post_id, '_cie_resource_kind', true);
+		$group = (string) get_post_meta($post_id, '_cie_resource_group', true);
+		$quantity = Bookings::get_resource_quantity($post_id);
+		$active_items = Bookings::get_resource_active_booking_items($post_id, gmdate('Y-m-d'));
+		$reserved_count = count($active_items);
+		$available_count = max($quantity - $reserved_count, 0);
+
+		if ($column === 'cie_resource_kind') {
+			echo '<span class="cie-admin-badge">' . esc_html(self::resource_kind_label($kind)) . '</span>';
+		}
+		if ($column === 'cie_resource_group') {
+			if ($kind !== 'equipment') {
+				echo '—';
+			} else {
+				echo esc_html($group !== '' ? self::equipment_group_label($group) : self::equipment_group_label('other'));
+			}
+		}
+		if ($column === 'cie_resource_quantity') {
+			echo (int) $quantity;
+		}
+		if ($column === 'cie_resource_stock') {
+			echo '<span class="cie-admin-stock">';
+			printf(
+				esc_html__('%1$d libres / %2$d total', 'cie-lab-booking'),
+				(int) $available_count,
+				(int) $quantity
+			);
+			echo '</span><br/>';
+			echo '<small>' . esc_html(sprintf(_n('%d reserva activa', '%d reservas activas', $reserved_count, 'cie-lab-booking'), $reserved_count)) . '</small>';
+		}
+		if ($column === 'cie_resource_reserved_by') {
+			if (!$active_items) {
+				echo '<span class="cie-admin-badge is-muted">' . esc_html__('Libre', 'cie-lab-booking') . '</span>';
+				return;
+			}
+			foreach ($active_items as $item) {
+				printf(
+					'<div><a href="%1$s">%2$s</a> <small>(%3$s - %4$s)</small></div>',
+					esc_url((string) $item['detail_url']),
+					esc_html((string) $item['user_name']),
+					esc_html((string) $item['start_date']),
+					esc_html((string) $item['end_date'])
+				);
+			}
+		}
+	}
+
+	public static function block_columns(array $columns): array {
+		$cols = [];
+		$cols['cb'] = $columns['cb'] ?? '';
+		$cols['title'] = __('Bloqueo', 'cie-lab-booking');
+		$cols['cie_block_dates'] = __('Fecha', 'cie-lab-booking');
+		$cols['cie_block_reason'] = __('Motivo', 'cie-lab-booking');
+		$cols['cie_block_resources'] = __('Recursos afectados', 'cie-lab-booking');
+		$cols['cie_block_active'] = __('Activo', 'cie-lab-booking');
+		$cols['date'] = $columns['date'] ?? __('Fecha', 'cie-lab-booking');
+		return $cols;
+	}
+
+	public static function block_column_content(string $column, int $post_id): void {
+		$start = (string) get_post_meta($post_id, '_cie_block_start_date', true);
+		$end = (string) get_post_meta($post_id, '_cie_block_end_date', true);
+		$reason = (string) get_post_meta($post_id, '_cie_block_reason', true);
+		$resource_ids = array_map('intval', (array) get_post_meta($post_id, '_cie_block_resource_ids', true));
+		$today = gmdate('Y-m-d');
+		$is_active = $start !== '' && $end !== '' && $start <= $today && $today <= $end;
+
+		if ($column === 'cie_block_dates') {
+			echo esc_html($start . ' - ' . $end);
+		}
+		if ($column === 'cie_block_reason') {
+			echo esc_html($reason !== '' ? $reason : '—');
+		}
+		if ($column === 'cie_block_resources') {
+			echo esc_html(self::block_resources_label($resource_ids));
+		}
+		if ($column === 'cie_block_active') {
+			echo $is_active
+				? '<span class="cie-admin-badge is-active">' . esc_html__('Activo', 'cie-lab-booking') . '</span>'
+				: '<span class="cie-admin-badge is-muted">' . esc_html__('Inactivo', 'cie-lab-booking') . '</span>';
+		}
+	}
+
+	public static function render_list_filters(): void {
+		global $typenow;
+		if (!$typenow) {
+			return;
+		}
+
+		if ($typenow === Post_Types::CPT_BOOKING) {
+			$status = isset($_GET['cie_booking_status_filter']) ? sanitize_key((string) $_GET['cie_booking_status_filter']) : '';
+			$activity = isset($_GET['cie_booking_activity_filter']) ? sanitize_key((string) $_GET['cie_booking_activity_filter']) : '';
+
+			echo '<select name="cie_booking_status_filter">';
+			echo '<option value="">' . esc_html__('Todos los estados', 'cie-lab-booking') . '</option>';
+			printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_PENDING), selected($status, Post_Types::BOOKING_STATUS_PENDING, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_PENDING)));
+			printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_APPROVED), selected($status, Post_Types::BOOKING_STATUS_APPROVED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_APPROVED)));
+			printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_CHANGES), selected($status, Post_Types::BOOKING_STATUS_CHANGES, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_CHANGES)));
+			printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_REJECTED), selected($status, Post_Types::BOOKING_STATUS_REJECTED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_REJECTED)));
+			printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr(Post_Types::BOOKING_STATUS_CANCELLED), selected($status, Post_Types::BOOKING_STATUS_CANCELLED, false), esc_html(self::status_label(Post_Types::BOOKING_STATUS_CANCELLED)));
+			echo '</select>';
+
+			echo '<select name="cie_booking_activity_filter">';
+			echo '<option value="">' . esc_html__('Todas las reservas', 'cie-lab-booking') . '</option>';
+			printf('<option value="active" %s>%s</option>', selected($activity, 'active', false), esc_html__('Activas hoy', 'cie-lab-booking'));
+			printf('<option value="upcoming" %s>%s</option>', selected($activity, 'upcoming', false), esc_html__('Próximas', 'cie-lab-booking'));
+			printf('<option value="past" %s>%s</option>', selected($activity, 'past', false), esc_html__('Finalizadas', 'cie-lab-booking'));
+			echo '</select>';
+		}
+
+		if ($typenow === Post_Types::CPT_RESOURCE) {
+			$kind = isset($_GET['cie_resource_kind_filter']) ? sanitize_key((string) $_GET['cie_resource_kind_filter']) : '';
+			$group = isset($_GET['cie_resource_group_filter']) ? sanitize_key((string) $_GET['cie_resource_group_filter']) : '';
+			$reservation = isset($_GET['cie_resource_reservation_filter']) ? sanitize_key((string) $_GET['cie_resource_reservation_filter']) : '';
+
+			echo '<select name="cie_resource_kind_filter">';
+			echo '<option value="">' . esc_html__('Todos los tipos', 'cie-lab-booking') . '</option>';
+			printf('<option value="space" %s>%s</option>', selected($kind, 'space', false), esc_html__('Espacio', 'cie-lab-booking'));
+			printf('<option value="equipment" %s>%s</option>', selected($kind, 'equipment', false), esc_html__('Equipo', 'cie-lab-booking'));
+			echo '</select>';
+
+			echo '<select name="cie_resource_group_filter">';
+			echo '<option value="">' . esc_html__('Todos los grupos', 'cie-lab-booking') . '</option>';
+			foreach (Bookings::get_equipment_groups() as $g) {
+				printf('<option value="%1$s" %2$s>%3$s</option>', esc_attr($g), selected($group, $g, false), esc_html(self::equipment_group_label($g)));
+			}
+			echo '</select>';
+
+			echo '<select name="cie_resource_reservation_filter">';
+			echo '<option value="">' . esc_html__('Reserva hoy: todos', 'cie-lab-booking') . '</option>';
+			printf('<option value="reserved" %s>%s</option>', selected($reservation, 'reserved', false), esc_html__('Reservados hoy', 'cie-lab-booking'));
+			printf('<option value="available" %s>%s</option>', selected($reservation, 'available', false), esc_html__('Libres hoy', 'cie-lab-booking'));
+			echo '</select>';
+		}
+
+		if ($typenow === Post_Types::CPT_BLOCK) {
+			$active = isset($_GET['cie_block_active_filter']) ? sanitize_key((string) $_GET['cie_block_active_filter']) : '';
+			echo '<select name="cie_block_active_filter">';
+			echo '<option value="">' . esc_html__('Todos los bloqueos', 'cie-lab-booking') . '</option>';
+			printf('<option value="active" %s>%s</option>', selected($active, 'active', false), esc_html__('Activos hoy', 'cie-lab-booking'));
+			printf('<option value="inactive" %s>%s</option>', selected($active, 'inactive', false), esc_html__('Inactivos hoy', 'cie-lab-booking'));
+			echo '</select>';
+		}
+	}
+
+	public static function apply_list_filters(\WP_Query $query): void {
+		if (!is_admin() || !$query->is_main_query()) {
+			return;
+		}
+
+		$post_type_raw = $query->get('post_type');
+		if (is_array($post_type_raw)) {
+			return;
+		}
+		$post_type = (string) $post_type_raw;
+		if ($post_type === '') {
+			return;
+		}
+
+		if ($post_type === Post_Types::CPT_BOOKING) {
+			$status = isset($_GET['cie_booking_status_filter']) ? sanitize_key((string) $_GET['cie_booking_status_filter']) : '';
+			$activity = isset($_GET['cie_booking_activity_filter']) ? sanitize_key((string) $_GET['cie_booking_activity_filter']) : '';
+			$today = gmdate('Y-m-d');
+			$meta = ['relation' => 'AND'];
+
+			if ($status !== '') {
+				$meta[] = [
+					'key' => '_cie_booking_status',
+					'value' => $status,
+				];
+			}
+			if ($activity === 'active') {
+				if ($status === '') {
+					$meta[] = [
+						'key' => '_cie_booking_status',
+						'value' => Post_Types::BOOKING_STATUS_APPROVED,
+					];
+				}
+				$meta[] = [
+					'key' => '_cie_booking_start_date',
+					'value' => $today,
+					'compare' => '<=',
+					'type' => 'DATE',
+				];
+				$meta[] = [
+					'key' => '_cie_booking_end_date',
+					'value' => $today,
+					'compare' => '>=',
+					'type' => 'DATE',
+				];
+			} elseif ($activity === 'upcoming') {
+				$meta[] = [
+					'key' => '_cie_booking_start_date',
+					'value' => $today,
+					'compare' => '>',
+					'type' => 'DATE',
+				];
+			} elseif ($activity === 'past') {
+				$meta[] = [
+					'key' => '_cie_booking_end_date',
+					'value' => $today,
+					'compare' => '<',
+					'type' => 'DATE',
+				];
+			}
+
+			if (count($meta) > 1) {
+				$query->set('meta_query', $meta);
+			}
+		}
+
+		if ($post_type === Post_Types::CPT_RESOURCE) {
+			$kind = isset($_GET['cie_resource_kind_filter']) ? sanitize_key((string) $_GET['cie_resource_kind_filter']) : '';
+			$group = isset($_GET['cie_resource_group_filter']) ? sanitize_key((string) $_GET['cie_resource_group_filter']) : '';
+			$reservation = isset($_GET['cie_resource_reservation_filter']) ? sanitize_key((string) $_GET['cie_resource_reservation_filter']) : '';
+
+			$meta = ['relation' => 'AND'];
+			if ($kind !== '') {
+				$meta[] = [
+					'key' => '_cie_resource_kind',
+					'value' => $kind,
+				];
+			}
+			if ($group !== '') {
+				$meta[] = [
+					'key' => '_cie_resource_group',
+					'value' => $group,
+				];
+			}
+			if (count($meta) > 1) {
+				$query->set('meta_query', $meta);
+			}
+
+			if ($reservation !== '') {
+				$reserved_ids = self::active_reserved_resource_ids(gmdate('Y-m-d'));
+				if ($reservation === 'reserved') {
+					$query->set('post__in', $reserved_ids ? $reserved_ids : [0]);
+				} elseif ($reservation === 'available' && $reserved_ids) {
+					$query->set('post__not_in', $reserved_ids);
+				}
+			}
+		}
+
+		if ($post_type === Post_Types::CPT_BLOCK) {
+			$active = isset($_GET['cie_block_active_filter']) ? sanitize_key((string) $_GET['cie_block_active_filter']) : '';
+			if ($active !== '') {
+				$today = gmdate('Y-m-d');
+				if ($active === 'active') {
+					$query->set('meta_query', [
+						[
+							'key' => '_cie_block_start_date',
+							'value' => $today,
+							'compare' => '<=',
+							'type' => 'DATE',
+						],
+						[
+							'key' => '_cie_block_end_date',
+							'value' => $today,
+							'compare' => '>=',
+							'type' => 'DATE',
+						],
+					]);
+				} elseif ($active === 'inactive') {
+					$query->set('meta_query', [
+						'relation' => 'OR',
+						[
+							'key' => '_cie_block_start_date',
+							'value' => $today,
+							'compare' => '>',
+							'type' => 'DATE',
+						],
+						[
+							'key' => '_cie_block_end_date',
+							'value' => $today,
+							'compare' => '<',
+							'type' => 'DATE',
+						],
+					]);
+				}
+			}
+		}
 	}
 
 	private static function resources_summary(array $space_ids, array $equipment_ids): string {
@@ -764,7 +1218,20 @@ final class Admin {
 			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
 			'other' => __('Otros', 'cie-lab-booking'),
 		];
-		return $map[$group] ?? $group;
+		if (isset($map[$group])) {
+			return $map[$group];
+		}
+		return ucwords(str_replace('-', ' ', $group));
+	}
+
+	private static function resource_kind_label(string $kind): string {
+		if ($kind === 'space') {
+			return (string) __('Espacio', 'cie-lab-booking');
+		}
+		if ($kind === 'equipment') {
+			return (string) __('Equipo', 'cie-lab-booking');
+		}
+		return $kind;
 	}
 
 	private static function status_label(string $status): string {
@@ -776,6 +1243,86 @@ final class Admin {
 			Post_Types::BOOKING_STATUS_CANCELLED => __('Anulada', 'cie-lab-booking'),
 		];
 		return $map[$status] ?? $status;
+	}
+
+	private static function status_slug(string $status): string {
+		$map = [
+			Post_Types::BOOKING_STATUS_PENDING => 'pending',
+			Post_Types::BOOKING_STATUS_APPROVED => 'approved',
+			Post_Types::BOOKING_STATUS_REJECTED => 'rejected',
+			Post_Types::BOOKING_STATUS_CHANGES => 'changes',
+			Post_Types::BOOKING_STATUS_CANCELLED => 'cancelled',
+		];
+		return $map[$status] ?? 'unknown';
+	}
+
+	private static function status_badge(string $status): string {
+		$slug = self::status_slug($status);
+		return sprintf(
+			'<span class="cie-admin-badge is-status-%1$s">%2$s</span>',
+			esc_attr($slug),
+			esc_html(self::status_label($status))
+		);
+	}
+
+	private static function activity_badge(int $booking_id): string {
+		$today = gmdate('Y-m-d');
+		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
+		$start = (string) get_post_meta($booking_id, '_cie_booking_start_date', true);
+		$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
+
+		if ($status !== Post_Types::BOOKING_STATUS_APPROVED || $start === '' || $end === '') {
+			return '<span class="cie-admin-badge is-muted">' . esc_html__('No activa', 'cie-lab-booking') . '</span>';
+		}
+		if ($start <= $today && $today <= $end) {
+			return '<span class="cie-admin-badge is-active">' . esc_html__('Activa', 'cie-lab-booking') . '</span>';
+		}
+		if ($start > $today) {
+			return '<span class="cie-admin-badge">' . esc_html__('Próxima', 'cie-lab-booking') . '</span>';
+		}
+		return '<span class="cie-admin-badge is-muted">' . esc_html__('Finalizada', 'cie-lab-booking') . '</span>';
+	}
+
+	/**
+	 * @param array<int> $resource_ids
+	 */
+	private static function block_resources_label(array $resource_ids): string {
+		$resource_ids = array_values(array_filter(array_map('intval', $resource_ids)));
+		if (!$resource_ids) {
+			return (string) __('Todos los recursos', 'cie-lab-booking');
+		}
+
+		$names = [];
+		foreach ($resource_ids as $rid) {
+			$p = get_post((int) $rid);
+			if ($p && $p->post_type === Post_Types::CPT_RESOURCE) {
+				$names[] = $p->post_title;
+			}
+		}
+		return implode(', ', $names);
+	}
+
+	/**
+	 * @return array<int>
+	 */
+	private static function active_reserved_resource_ids(string $date): array {
+		$ids = [];
+		$bookings = Bookings::get_overlapping_approved_bookings($date, $date);
+		foreach ($bookings as $booking) {
+			foreach ((array) get_post_meta((int) $booking->ID, '_cie_booking_spaces', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid > 0) {
+					$ids[$rid] = $rid;
+				}
+			}
+			foreach ((array) get_post_meta((int) $booking->ID, '_cie_booking_equipment', true) as $rid) {
+				$rid = (int) $rid;
+				if ($rid > 0) {
+					$ids[$rid] = $rid;
+				}
+			}
+		}
+		return array_values($ids);
 	}
 
 	private static function legend_item(string $color, string $label): void {
