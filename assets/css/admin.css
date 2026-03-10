@@ -90,7 +90,7 @@
 
 .cie-admin-calendar-layout {
   display: grid;
-  grid-template-columns: minmax(640px, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(640px, 1fr) minmax(640px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -205,4 +205,3 @@
     grid-template-columns: 1fr;
   }
 }
-
