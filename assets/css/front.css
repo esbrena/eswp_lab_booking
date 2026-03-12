@@ -244,6 +244,16 @@
   color: #334155;
 }
 
+.cie-edit-reservation-info {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0 14px;
+  display: grid;
+  gap: 6px;
+}
+
 .cie-lab-booking__flow {
   display: grid;
   gap: 12px;

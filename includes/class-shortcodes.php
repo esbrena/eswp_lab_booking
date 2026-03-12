@@ -107,8 +107,15 @@ final class Shortcodes {
 			$_POST['use_equipment'] = !empty((array) ($_POST['equipment'] ?? [])) ? '1' : '';
 		}
 
-		$spaces = Bookings::get_resources('space', true);
-		$equipment_grouped = Bookings::get_equipment_grouped(true);
+		$resources_only_available = !$is_edit_mode;
+		$spaces = Bookings::get_resources('space', $resources_only_available);
+		$equipment_grouped = Bookings::get_equipment_grouped($resources_only_available);
+		$posted_space_ids = array_values(array_map('strval', array_filter(array_map('intval', (array) ($_POST['spaces'] ?? [])))));
+		$posted_equipment_ids = array_values(array_map('strval', array_filter(array_map('intval', (array) ($_POST['equipment'] ?? [])))));
+		$edit_start_date = $is_edit_mode ? (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true) : '';
+		$edit_end_date = $is_edit_mode ? (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true) : '';
+		$edit_space_names = $is_edit_mode ? self::resource_names((array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true), 'space') : [];
+		$edit_equipment_names = $is_edit_mode ? self::resource_names((array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true), 'equipment') : [];
 		$range_prefill = trim((string) ($_POST['booking_range'] ?? ''));
 		$posted_start = trim((string) ($_POST['start_date'] ?? ''));
 		$posted_end = trim((string) ($_POST['end_date'] ?? ''));
@@ -122,7 +129,7 @@ final class Shortcodes {
 			<h3>
 				<?php
 				echo $is_edit_mode
-					? esc_html__('Editar reserva de equipos / espacios', 'cie-lab-booking')
+					? esc_html__('Editar reserva', 'cie-lab-booking')
 					: esc_html__('Reserva de equipos / espacios', 'cie-lab-booking');
 				?>
 			</h3>
@@ -133,6 +140,22 @@ final class Shortcodes {
 					: esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking');
 				?>
 			</p>
+			<?php if ($is_edit_mode): ?>
+				<div class="cie-edit-reservation-info">
+					<div>
+						<strong><?php echo esc_html__('Fecha de la reserva:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_start_date . ' - ' . $edit_end_date); ?>
+					</div>
+					<div>
+						<strong><?php echo esc_html__('Espacios reservados:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_space_names ? implode(', ', $edit_space_names) : __('Ninguno', 'cie-lab-booking')); ?>
+					</div>
+					<div>
+						<strong><?php echo esc_html__('Equipos reservados:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_equipment_names ? implode(', ', $edit_equipment_names) : __('Ninguno', 'cie-lab-booking')); ?>
+					</div>
+				</div>
+			<?php endif; ?>
 
 			<?php if ($edit_admin_message): ?>
 				<p><strong><?php echo esc_html__('Cambios solicitados por el administrador:', 'cie-lab-booking'); ?></strong><br/>
@@ -217,7 +240,7 @@ final class Shortcodes {
 					<div class="cie-lab-booking__notice" data-cie-notice="spaces" style="display:none"></div>
 					<?php foreach ($spaces as $space): ?>
 						<label class="cie-option">
-							<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" <?php echo in_array((string) $space->ID, (array) ($_POST['spaces'] ?? []), true) ? 'checked' : ''; ?> />
+							<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
 							<?php echo esc_html($space->post_title); ?>
 						</label>
 					<?php endforeach; ?>
@@ -232,7 +255,7 @@ final class Shortcodes {
 							<?php foreach ($items as $eq): ?>
 								<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
 								<label class="cie-option">
-									<input type="checkbox" name="equipment[]" value="<?php echo esc_attr($eq->ID); ?>" <?php echo in_array((string) $eq->ID, (array) ($_POST['equipment'] ?? []), true) ? 'checked' : ''; ?> />
+									<input type="checkbox" name="equipment[]" value="<?php echo esc_attr($eq->ID); ?>" <?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?> />
 									<?php echo esc_html($eq->post_title); ?>
 									<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
 								</label>
@@ -837,6 +860,28 @@ final class Shortcodes {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	/**
+	 * @param array<int|string> $resource_ids
+	 * @return array<int,string>
+	 */
+	private static function resource_names(array $resource_ids, string $kind = ''): array {
+		$names = [];
+		foreach ($resource_ids as $rid) {
+			$p = get_post((int) $rid);
+			if (!$p || $p->post_type !== Post_Types::CPT_RESOURCE) {
+				continue;
+			}
+			if ($kind !== '') {
+				$current_kind = (string) get_post_meta((int) $p->ID, '_cie_resource_kind', true);
+				if ($current_kind !== $kind) {
+					continue;
+				}
+			}
+			$names[] = (string) $p->post_title;
+		}
+		return $names;
 	}
 
 	private static function resolve_form_base_url(string $form_url = ''): string {
