@@ -358,8 +358,8 @@ final class Admin {
 					(array) get_post_meta((int) $b->ID, '_cie_booking_equipment', true)
 				);
 				echo '<tr>';
-				echo '<td><a href="' . esc_url($link) . '">' . esc_html($start_b . ' - ' . $end_b) . '</a><br/><small>' . esc_html($b->post_title) . '</small></td>';
-				echo '<td>' . self::status_badge($status) . '<br/>' . self::activity_badge((int) $b->ID) . '</td>';
+				echo '<td><a href="' . esc_url($link) . '">' . esc_html($start_b . ' - ' . $end_b) . '</a> ' . self::activity_badge((int) $b->ID) . '<br/><small>' . esc_html($b->post_title) . '</small></td>';
+				echo '<td>' . self::status_badge($status) . '</td>';
 				echo '<td>' . esc_html($user_name) . '</td>';
 				echo '<td>' . esc_html($resources) . '</td>';
 				echo '</tr>';
@@ -1345,21 +1345,27 @@ final class Admin {
 	}
 
 	private static function activity_badge(int $booking_id): string {
+		$is_active = self::booking_is_active_today($booking_id);
+		$label = $is_active ? __('Activa', 'cie-lab-booking') : __('No activa', 'cie-lab-booking');
+		$state = $is_active ? 'is-active' : 'is-inactive';
+		return sprintf(
+			'<span class="cie-admin-activity %1$s"><span class="cie-admin-activity__dot" aria-hidden="true"></span>%2$s</span>',
+			esc_attr($state),
+			esc_html($label)
+		);
+	}
+
+	private static function booking_is_active_today(int $booking_id): bool {
 		$today = gmdate('Y-m-d');
 		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
 		$start = (string) get_post_meta($booking_id, '_cie_booking_start_date', true);
 		$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
 
 		if ($status !== Post_Types::BOOKING_STATUS_APPROVED || $start === '' || $end === '') {
-			return '<span class="cie-admin-badge is-muted">' . esc_html__('No activa', 'cie-lab-booking') . '</span>';
+			return false;
 		}
-		if ($start <= $today && $today <= $end) {
-			return '<span class="cie-admin-badge is-active">' . esc_html__('Activa', 'cie-lab-booking') . '</span>';
-		}
-		if ($start > $today) {
-			return '<span class="cie-admin-badge">' . esc_html__('Próxima', 'cie-lab-booking') . '</span>';
-		}
-		return '<span class="cie-admin-badge is-muted">' . esc_html__('Finalizada', 'cie-lab-booking') . '</span>';
+
+		return $start <= $today && $today <= $end;
 	}
 
 	/**

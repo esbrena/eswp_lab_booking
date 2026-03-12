@@ -46,6 +46,7 @@
   color: #0f172a;
   text-decoration: none;
   font-weight: 600;
+  cursor: pointer;
 }
 
 .cie-btn--primary {
@@ -64,6 +65,15 @@
   padding: 10px 10px;
   border-bottom: 1px solid #e2e8f0;
   vertical-align: top;
+}
+
+.cie-table__actions {
+  white-space: nowrap;
+}
+
+.cie-table__actions form {
+  display: inline-block;
+  margin: 0 0 0 6px;
 }
 
 .cie-table thead th {
@@ -487,7 +497,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .cie-cal-booking-card__extra {

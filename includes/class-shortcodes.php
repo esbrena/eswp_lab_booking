@@ -276,6 +276,7 @@ final class Shortcodes {
 		}
 
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 
 		$bookings = get_posts([
@@ -303,6 +304,7 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
+			<?php echo self::render_action_notice($action_notice); ?>
 
 			<div id="<?php echo esc_attr($uid); ?>" class="cie-inline-tabs" data-cie-inline-tabs>
 				<style>
@@ -333,7 +335,7 @@ final class Shortcodes {
 				</div>
 
 				<div class="cie-inline-tabs__panel is-active" role="tabpanel" data-panel="current">
-					<?php echo self::render_booking_list($current); ?>
+					<?php echo self::render_booking_list($current, '', true); ?>
 				</div>
 				<div class="cie-inline-tabs__panel" role="tabpanel" data-panel="history">
 					<?php echo self::render_booking_list($history); ?>
@@ -433,6 +435,7 @@ final class Shortcodes {
 		);
 
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 		$bookings = get_posts([
 			'post_type' => Post_Types::CPT_BOOKING,
@@ -455,7 +458,8 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
-			<?php echo self::render_booking_list($current, (string) $atts['form_url']); ?>
+			<?php echo self::render_action_notice($action_notice); ?>
+			<?php echo self::render_booking_list($current, (string) $atts['form_url'], true); ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -478,6 +482,7 @@ final class Shortcodes {
 		);
 
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 		$bookings = get_posts([
 			'post_type' => Post_Types::CPT_BOOKING,
@@ -500,6 +505,7 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
+			<?php echo self::render_action_notice($action_notice); ?>
 			<?php echo self::render_booking_list($history, (string) $atts['form_url']); ?>
 		</div>
 		<?php
@@ -628,7 +634,7 @@ final class Shortcodes {
 	/**
 	 * @param array<int,\WP_Post> $bookings
 	 */
-	private static function render_booking_list(array $bookings, string $form_url = ''): string {
+	private static function render_booking_list(array $bookings, string $form_url = '', bool $show_actions = false): string {
 		if (!$bookings) {
 			return '<p><em>' . esc_html__('No hay reservas.', 'cie-lab-booking') . '</em></p>';
 		}
@@ -641,6 +647,9 @@ final class Shortcodes {
 					<th><?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></th>
 					<th><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
 					<th><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
+					<?php if ($show_actions): ?>
+						<th><?php echo esc_html__('Acciones', 'cie-lab-booking'); ?></th>
+					<?php endif; ?>
 				</tr>
 			</thead>
 			<tbody>
@@ -655,6 +664,8 @@ final class Shortcodes {
 				$base = $form_url !== '' ? $form_url : (string) get_permalink();
 				$edit_url = add_query_arg(['booking_id' => (int) $b->ID], $base);
 				$status_slug = self::status_slug($status);
+				$can_edit = in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true);
+				$can_delete = !in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true);
 				?>
 				<tr>
 					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
@@ -666,12 +677,36 @@ final class Shortcodes {
 							<?php echo esc_html(self::status_label($status)); ?>
 						</span>
 						<?php if ($status === Post_Types::BOOKING_STATUS_CHANGES): ?>
-							<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
+							<?php if (!$show_actions): ?>
+								<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
+							<?php endif; ?>
 							<?php if ($admin_message): ?>
 								<br/><small><?php echo esc_html($admin_message); ?></small>
 							<?php endif; ?>
 						<?php endif; ?>
 					</td>
+					<?php if ($show_actions): ?>
+						<td class="cie-table__actions">
+							<?php if ($can_edit): ?>
+								<a class="cie-btn" href="<?php echo esc_url($edit_url); ?>">
+									<?php echo esc_html__('Editar', 'cie-lab-booking'); ?>
+								</a>
+							<?php endif; ?>
+							<?php if ($can_delete): ?>
+								<form method="post" style="display:inline-block;margin:0;">
+									<?php wp_nonce_field('cie_my_booking_action', '_wpnonce_cie_my_booking_action'); ?>
+									<input type="hidden" name="cie_my_booking_action" value="delete" />
+									<input type="hidden" name="booking_id" value="<?php echo esc_attr((string) $b->ID); ?>" />
+									<button type="submit" class="cie-btn" onclick="return confirm('<?php echo esc_js(__('¿Eliminar esta reserva?', 'cie-lab-booking')); ?>');">
+										<?php echo esc_html__('Eliminar', 'cie-lab-booking'); ?>
+									</button>
+								</form>
+							<?php endif; ?>
+							<?php if (!$can_edit && !$can_delete): ?>
+								—
+							<?php endif; ?>
+						</td>
+					<?php endif; ?>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -756,6 +791,60 @@ final class Shortcodes {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	/**
+	 * @return array{type:string,message:string}
+	 */
+	private static function handle_user_booking_action(int $user_id): array {
+		static $handled = null;
+		if (is_array($handled)) {
+			return $handled;
+		}
+
+		$handled = ['type' => '', 'message' => ''];
+		if (empty($_POST['cie_my_booking_action'])) {
+			return $handled;
+		}
+
+		if (empty($_POST['_wpnonce_cie_my_booking_action']) || !wp_verify_nonce((string) $_POST['_wpnonce_cie_my_booking_action'], 'cie_my_booking_action')) {
+			$handled = ['type' => 'error', 'message' => __('No se ha podido procesar la acción (nonce inválido).', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$action = sanitize_key((string) ($_POST['cie_my_booking_action'] ?? ''));
+		$booking_id = (int) ($_POST['booking_id'] ?? 0);
+		if ($action !== 'delete' || $booking_id <= 0) {
+			$handled = ['type' => 'error', 'message' => __('Acción no válida.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$booking = Bookings::get_booking($booking_id);
+		if (!$booking || (int) $booking->post_author !== $user_id) {
+			$handled = ['type' => 'error', 'message' => __('No puede eliminar esta reserva.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
+		if (in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true)) {
+			$handled = ['type' => 'error', 'message' => __('La reserva ya no está activa.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		Bookings::set_booking_status($booking_id, Post_Types::BOOKING_STATUS_CANCELLED);
+		$handled = ['type' => 'success', 'message' => __('Reserva eliminada correctamente.', 'cie-lab-booking')];
+		return $handled;
+	}
+
+	/**
+	 * @param array{type:string,message:string} $notice
+	 */
+	private static function render_action_notice(array $notice): string {
+		if (empty($notice['type']) || empty($notice['message'])) {
+			return '';
+		}
+		$class = $notice['type'] === 'error' ? 'cie-lab-booking__errors' : 'cie-lab-booking__success';
+		return '<div class="' . esc_attr($class) . '"><p>' . esc_html((string) $notice['message']) . '</p></div>';
 	}
 
 	/**
