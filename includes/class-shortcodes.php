@@ -42,7 +42,7 @@ final class Shortcodes {
 			$edit_booking = Bookings::get_booking($edit_booking_id);
 			if ($edit_booking && (int) $edit_booking->post_author === $user_id) {
 				$status = (string) get_post_meta($edit_booking_id, '_cie_booking_status', true);
-				if ($status === Post_Types::BOOKING_STATUS_CHANGES) {
+				if (in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true)) {
 					$edit_admin_message = (string) get_post_meta($edit_booking_id, '_cie_booking_admin_message', true);
 				} else {
 					$edit_booking = null;
@@ -106,7 +106,7 @@ final class Shortcodes {
 
 		ob_start();
 		?>
-		<div class="cie-lab-booking">
+		<div id="cie-booking-form" class="cie-lab-booking">
 			<h3><?php echo esc_html__('Reserva de equipos / espacios', 'cie-lab-booking'); ?></h3>
 			<p><?php echo esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking'); ?></p>
 
@@ -266,7 +266,7 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 
-	public static function render_my_bookings(): string {
+	public static function render_my_bookings($atts = []): string {
 		// Backwards compatible combined view.
 		if (!is_user_logged_in()) {
 			return '<p>' . esc_html__('Debes iniciar sesión para ver tus reservas.', 'cie-lab-booking') . '</p>';
@@ -274,6 +274,13 @@ final class Shortcodes {
 		if (!Util::current_user_can_book()) {
 			return '<p>' . esc_html__('Tu usuario no tiene permisos para ver reservas.', 'cie-lab-booking') . '</p>';
 		}
+
+		$atts = shortcode_atts(
+			[
+				'form_url' => '',
+			],
+			is_array($atts) ? $atts : []
+		);
 
 		$user_id = get_current_user_id();
 		$action_notice = self::handle_user_booking_action($user_id);
@@ -335,7 +342,7 @@ final class Shortcodes {
 				</div>
 
 				<div class="cie-inline-tabs__panel is-active" role="tabpanel" data-panel="current">
-					<?php echo self::render_booking_list($current, '', true); ?>
+					<?php echo self::render_booking_list($current, (string) $atts['form_url'], true); ?>
 				</div>
 				<div class="cie-inline-tabs__panel" role="tabpanel" data-panel="history">
 					<?php echo self::render_booking_list($history); ?>
@@ -661,8 +668,14 @@ final class Shortcodes {
 				$admin_message = (string) get_post_meta($b->ID, '_cie_booking_admin_message', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
-				$base = $form_url !== '' ? $form_url : (string) get_permalink();
-				$edit_url = add_query_arg(['booking_id' => (int) $b->ID], $base);
+				$base = self::resolve_form_base_url($form_url);
+				$edit_url = add_query_arg(
+					[
+						'booking_id' => (int) $b->ID,
+						'cie_booking_edit' => '1',
+					],
+					$base
+				);
 				$status_slug = self::status_slug($status);
 				$can_edit = in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true);
 				$can_delete = !in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true);
@@ -688,7 +701,12 @@ final class Shortcodes {
 					<?php if ($show_actions): ?>
 						<td class="cie-table__actions">
 							<?php if ($can_edit): ?>
-								<a class="cie-btn" href="<?php echo esc_url($edit_url); ?>">
+								<a
+									class="cie-btn cie-booking-edit-link"
+									href="<?php echo esc_url($edit_url . '#cie-booking-form'); ?>"
+									data-booking-id="<?php echo esc_attr((string) $b->ID); ?>"
+									data-form-url="<?php echo esc_attr($base); ?>"
+								>
 									<?php echo esc_html__('Editar', 'cie-lab-booking'); ?>
 								</a>
 							<?php endif; ?>
@@ -791,6 +809,25 @@ final class Shortcodes {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	private static function resolve_form_base_url(string $form_url = ''): string {
+		$form_url = trim($form_url);
+		if ($form_url !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $form_url);
+		}
+
+		$referer = wp_get_referer();
+		if (is_string($referer) && $referer !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $referer);
+		}
+
+		$permalink = get_permalink();
+		if (is_string($permalink) && $permalink !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $permalink);
+		}
+
+		return home_url('/');
 	}
 
 	/**

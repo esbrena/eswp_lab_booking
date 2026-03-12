@@ -340,6 +340,29 @@
     setSubmitState(false);
     updateFlow();
 
+    function buildEditUrl(baseUrl, bookingId) {
+      try {
+        var u = new URL(baseUrl || window.location.href, window.location.href);
+        u.searchParams.set('booking_id', String(bookingId));
+        u.searchParams.set('cie_booking_edit', '1');
+        u.hash = 'cie-booking-form';
+        return u.toString();
+      } catch (err) {
+        var sep = (baseUrl || '').indexOf('?') === -1 ? '?' : '&';
+        return (baseUrl || window.location.href) + sep + 'booking_id=' + encodeURIComponent(String(bookingId)) + '&cie_booking_edit=1#cie-booking-form';
+      }
+    }
+
+    // Works even when booking lists are injected later via AJAX.
+    $(document).on('click', '.cie-booking-edit-link', function (e) {
+      var $link = $(this);
+      var bookingId = parseInt(($link.data('bookingId') || '').toString(), 10);
+      if (!bookingId) return;
+      e.preventDefault();
+      var baseUrl = ($link.data('formUrl') || $link.attr('href') || window.location.href).toString();
+      window.location.assign(buildEditUrl(baseUrl, bookingId));
+    });
+
     // Calendar hover/click details (front + admin calendar shortcode rendered on front).
     var tooltip = null;
     var detailCache = {};
