@@ -53,6 +53,7 @@ final class Shortcodes {
 				$edit_booking_id = 0;
 			}
 		}
+		$is_edit_mode = $edit_booking_id > 0 && $edit_booking !== null;
 
 		if (!empty($_POST['cie_booking_submit'])) {
 			check_admin_referer('cie_booking_submit', '_wpnonce_cie_booking');
@@ -80,19 +81,30 @@ final class Shortcodes {
 			}
 		}
 
-		// Prefill from existing booking if editing and not yet posted.
-		if ($edit_booking_id && empty($_POST)) {
-			$_POST['start_date'] = (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true);
-			$_POST['end_date'] = (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true);
-			$_POST['spaces'] = (array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true);
-			$_POST['equipment'] = (array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true);
-			$_POST['use_space'] = !empty($_POST['spaces']) ? '1' : '';
-			$_POST['use_equipment'] = !empty($_POST['equipment']) ? '1' : '';
-			$_POST['has_courses'] = 'yes';
-			$_POST['project_name'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_name', true);
-			$_POST['project_duration'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_duration', true);
-			$_POST['project_responsible'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_responsible', true);
-			$_POST['project_ip_email'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_ip_email', true);
+		// Prefill from existing booking in edit mode when form has not been submitted.
+		if ($is_edit_mode && empty($_POST['cie_booking_submit'])) {
+			$defaults = [
+				'start_date' => (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true),
+				'end_date' => (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true),
+				'spaces' => (array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true),
+				'equipment' => (array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true),
+				'project_name' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_name', true),
+				'project_duration' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_duration', true),
+				'project_responsible' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_responsible', true),
+				'project_ip_email' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_ip_email', true),
+				'has_courses' => 'yes',
+			];
+
+			foreach ($defaults as $key => $value) {
+				$current = $_POST[$key] ?? null;
+				$is_empty_value = is_array($value) ? empty((array) $current) : trim((string) $current) === '';
+				if (!isset($_POST[$key]) || $is_empty_value) {
+					$_POST[$key] = $value;
+				}
+			}
+
+			$_POST['use_space'] = !empty((array) ($_POST['spaces'] ?? [])) ? '1' : '';
+			$_POST['use_equipment'] = !empty((array) ($_POST['equipment'] ?? [])) ? '1' : '';
 		}
 
 		$spaces = Bookings::get_resources('space', true);
@@ -107,8 +119,20 @@ final class Shortcodes {
 		ob_start();
 		?>
 		<div id="cie-booking-form" class="cie-lab-booking">
-			<h3><?php echo esc_html__('Reserva de equipos / espacios', 'cie-lab-booking'); ?></h3>
-			<p><?php echo esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking'); ?></p>
+			<h3>
+				<?php
+				echo $is_edit_mode
+					? esc_html__('Editar reserva de equipos / espacios', 'cie-lab-booking')
+					: esc_html__('Reserva de equipos / espacios', 'cie-lab-booking');
+				?>
+			</h3>
+			<p>
+				<?php
+				echo $is_edit_mode
+					? esc_html__('Revise y actualice los datos de su reserva. Cuando termine, envíe los cambios para que puedan validarse de nuevo.', 'cie-lab-booking')
+					: esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking');
+				?>
+			</p>
 
 			<?php if ($edit_admin_message): ?>
 				<p><strong><?php echo esc_html__('Cambios solicitados por el administrador:', 'cie-lab-booking'); ?></strong><br/>
@@ -117,7 +141,9 @@ final class Shortcodes {
 
 			<?php if ($success): ?>
 				<div class="cie-lab-booking__success">
-					<div class="cie-lab-booking__success-title"><?php echo esc_html__('Reserva enviada', 'cie-lab-booking'); ?></div>
+					<div class="cie-lab-booking__success-title">
+						<?php echo esc_html($is_edit_mode ? __('Cambios enviados', 'cie-lab-booking') : __('Reserva enviada', 'cie-lab-booking')); ?>
+					</div>
 					<p><?php echo esc_html($success); ?></p>
 					<div class="cie-lab-booking__success-actions">
 						<?php
@@ -257,7 +283,9 @@ final class Shortcodes {
 				</fieldset>
 
 				<p class="cie-lab-booking__submit" data-cie-submit-wrap style="display:none">
-					<button type="submit" class="cie-btn cie-btn--primary" data-cie-submit><?php echo esc_html__('Enviar reserva', 'cie-lab-booking'); ?></button>
+					<button type="submit" class="cie-btn cie-btn--primary" data-cie-submit>
+						<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
+					</button>
 				</p>
 				</div>
 			</form>
