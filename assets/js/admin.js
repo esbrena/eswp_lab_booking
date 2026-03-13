@@ -39,6 +39,7 @@
         var $container = $kind.closest('.inside, form');
         var $groupWrap = $container.find('[data-cie-resource-group-wrap="1"]').first();
         var $qtyWrap = $container.find('[data-cie-resource-quantity-wrap="1"]').first();
+        var $depWrap = $container.find('[data-cie-resource-dependency-wrap="1"]').first();
         var $groupSelect = $container.find('[data-cie-resource-group-existing="1"]').first();
         var $groupNewInput = $container.find('input[name="cie_resource_group_new"]').first();
 
@@ -46,8 +47,10 @@
           var isEquipment = $kind.val() === 'equipment';
           $groupWrap.toggle(isEquipment);
           $qtyWrap.toggle(isEquipment);
+          $depWrap.toggle(isEquipment);
           $groupWrap.find('input,select').prop('disabled', !isEquipment);
           $qtyWrap.find('input').prop('disabled', !isEquipment);
+          $depWrap.find('input').prop('disabled', !isEquipment);
         }
 
         function refreshGroupMode() {

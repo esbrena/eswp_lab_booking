@@ -181,6 +181,30 @@ final class Bookings {
 	}
 
 	/**
+	 * @return array<int>
+	 */
+	public static function get_equipment_required_ids(int $equipment_id): array {
+		$required = array_values(array_filter(array_map('intval', (array) get_post_meta($equipment_id, '_cie_resource_required_equipment', true))));
+		$required = array_values(array_diff($required, [$equipment_id]));
+		if (!$required) {
+			return [];
+		}
+
+		$valid = [];
+		foreach ($required as $rid) {
+			$p = get_post($rid);
+			if ($p && $p->post_type === Post_Types::CPT_RESOURCE) {
+				$kind = (string) get_post_meta((int) $p->ID, '_cie_resource_kind', true);
+				if ($kind === 'equipment') {
+					$valid[] = (int) $p->ID;
+				}
+			}
+		}
+
+		return array_values(array_unique($valid));
+	}
+
+	/**
 	 * @return array<int,string>
 	 */
 	public static function get_equipment_groups(): array {
@@ -453,6 +477,23 @@ final class Bookings {
 			return $equipment_ids;
 		}
 
+		$equipment_ids = array_values(array_unique(array_filter(array_map('intval', $equipment_ids))));
+		$selected = array_fill_keys($equipment_ids, true);
+		$queue = $equipment_ids;
+		$safety = 0;
+		while (!empty($queue) && $safety < 500) {
+			$safety++;
+			$current_id = (int) array_shift($queue);
+			foreach (self::get_equipment_required_ids($current_id) as $req_id) {
+				if (!isset($selected[$req_id])) {
+					$selected[$req_id] = true;
+					$queue[] = $req_id;
+				}
+			}
+		}
+		$equipment_ids = array_values(array_map('intval', array_keys($selected)));
+
+		// Legacy title-based dependencies kept for backward compatibility.
 		$rules = self::equipment_dependency_rules();
 		if (empty($rules)) {
 			return $equipment_ids;
@@ -477,11 +518,6 @@ final class Bookings {
 					$req_id = self::find_equipment_id_by_title_contains($req_needle);
 					if ($req_id && !in_array($req_id, $equipment_ids, true)) {
 						$required_to_add[] = $req_id;
-						$errors[] = sprintf(
-							/* translators: %s: required equipment name */
-							__('Debe añadir a su reserva la opción: %s', 'cie-lab-booking'),
-							$req_needle
-						);
 					}
 				}
 			}

@@ -310,6 +310,15 @@
   margin: 6px 0;
 }
 
+.cie-option--locked {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.cie-option--locked input[type='checkbox'] {
+  cursor: not-allowed;
+}
+
 .cie-option small {
   color: #64748b;
 }

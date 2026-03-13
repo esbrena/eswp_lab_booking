@@ -589,6 +589,7 @@ final class Admin {
 		if ($quantity < 1) {
 			$quantity = 1;
 		}
+		$required_equipment = array_values(array_filter(array_map('intval', (array) get_post_meta($post->ID, '_cie_resource_required_equipment', true))));
 
 		$groups_map = Bookings::get_equipment_groups_map();
 		$group = sanitize_key($group);
@@ -626,6 +627,35 @@ final class Admin {
 		echo '<p data-cie-resource-quantity-wrap="1"><label>' . esc_html__('Cantidad disponible', 'cie-lab-booking') . ' ';
 		printf('<input type="number" name="cie_resource_quantity" min="1" step="1" value="%d" />', (int) $quantity);
 		echo '</label> <small>' . esc_html__('Para equipos: cuántas unidades del mismo equipo hay disponibles.', 'cie-lab-booking') . '</small></p>';
+
+		$all_equipment = Bookings::get_resources('equipment', false);
+		echo '<div data-cie-resource-dependency-wrap="1">';
+		echo '<p><strong>' . esc_html__('Interdependencia de equipos', 'cie-lab-booking') . '</strong></p>';
+		echo '<p>' . esc_html__('Si el usuario selecciona este equipo en el formulario, también se seleccionarán automáticamente los equipos marcados aquí y no podrán desmarcarse mientras el equipo principal esté seleccionado.', 'cie-lab-booking') . '</p>';
+		echo '<div class="cie-admin-resource-picker">';
+		if (!$all_equipment) {
+			echo '<p><em>' . esc_html__('No hay equipos disponibles para relacionar.', 'cie-lab-booking') . '</em></p>';
+		} else {
+			$has_options = false;
+			foreach ($all_equipment as $eq) {
+				if ((int) $eq->ID === (int) $post->ID) {
+					continue;
+				}
+				$has_options = true;
+				$checked = in_array((int) $eq->ID, $required_equipment, true) ? 'checked' : '';
+				printf(
+					'<label><input type="checkbox" name="cie_resource_required_equipment[]" value="%1$d" %2$s /> %3$s</label>',
+					(int) $eq->ID,
+					$checked,
+					esc_html((string) $eq->post_title)
+				);
+			}
+			if (!$has_options) {
+				echo '<p><em>' . esc_html__('No hay otros equipos para relacionar.', 'cie-lab-booking') . '</em></p>';
+			}
+		}
+		echo '</div>';
+		echo '</div>';
 
 		echo '<p><label>' . esc_html__('Código/ID', 'cie-lab-booking') . ' ';
 		printf('<input type="text" name="cie_resource_code" value="%s" />', esc_attr($code));
@@ -852,8 +882,11 @@ final class Admin {
 			$code = sanitize_text_field((string) ($_POST['cie_resource_code'] ?? ''));
 			$available = !empty($_POST['cie_resource_available']) ? '1' : '0';
 			$quantity = max(1, (int) ($_POST['cie_resource_quantity'] ?? 1));
+			$required_equipment = array_values(array_filter(array_map('intval', (array) ($_POST['cie_resource_required_equipment'] ?? []))));
+			$required_equipment = array_values(array_diff($required_equipment, [$post_id]));
 			if ($kind !== 'equipment') {
 				$quantity = 1;
+				$required_equipment = [];
 			}
 
 			update_post_meta($post_id, '_cie_resource_kind', $kind);
@@ -861,6 +894,7 @@ final class Admin {
 			update_post_meta($post_id, '_cie_resource_code', $code);
 			update_post_meta($post_id, '_cie_resource_available', $available);
 			update_post_meta($post_id, '_cie_resource_quantity', $quantity);
+			update_post_meta($post_id, '_cie_resource_required_equipment', $required_equipment);
 		}
 
 		if ($post->post_type === Post_Types::CPT_BLOCK) {

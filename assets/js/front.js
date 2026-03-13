@@ -169,6 +169,133 @@
       return { spacesRemoved: removedSpaces, equipmentRemoved: removedEq };
     }
 
+    function parseRequires($input) {
+      var raw = ($input.attr('data-cie-requires') || '').toString().trim();
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .map(function (x) { return parseInt(String(x), 10); })
+          .filter(function (x) { return !!x; });
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function clearEquipmentDependencyLocks() {
+      $flow.find('input[type="checkbox"][name="equipment[]"]').each(function () {
+        $(this).removeAttr('data-cie-locked');
+        $(this).closest('label').removeClass('cie-option--locked');
+      });
+    }
+
+    function applyEquipmentDependencies() {
+      var $eqInputs = $flow.find('input[type="checkbox"][name="equipment[]"]');
+      var byId = {};
+      var nameById = {};
+      var lockedBySource = {};
+      var invalidSources = {};
+      var infoMessages = [];
+      var errorMessages = [];
+
+      clearEquipmentDependencyLocks();
+
+      $eqInputs.each(function () {
+        var id = parseInt($(this).val(), 10);
+        if (!id) return;
+        byId[id] = $(this);
+        nameById[id] = ($(this).attr('data-cie-equipment-name') || '').toString() || ('Equipo #' + id);
+      });
+
+      var sourceIds = [];
+      $eqInputs.filter(':checked').each(function () {
+        var id = parseInt($(this).val(), 10);
+        if (id) sourceIds.push(id);
+      });
+
+      sourceIds.forEach(function (sourceId) {
+        var stack = [sourceId];
+        var visited = {};
+        while (stack.length) {
+          var currentId = stack.pop();
+          var $current = byId[currentId];
+          if (!$current || !$current.length) continue;
+          var reqIds = parseRequires($current);
+          reqIds.forEach(function (reqId) {
+            if (!reqId || reqId === sourceId) return;
+            if (visited[reqId]) return;
+            visited[reqId] = true;
+
+            var $req = byId[reqId];
+            if (!$req || !$req.length) return;
+            if ($req.prop('disabled')) {
+              invalidSources[sourceId] = invalidSources[sourceId] || [];
+              invalidSources[sourceId].push(reqId);
+              return;
+            }
+
+            if (!$req.prop('checked')) {
+              $req.prop('checked', true);
+            }
+
+            if (!lockedBySource[sourceId]) lockedBySource[sourceId] = {};
+            lockedBySource[sourceId][reqId] = reqId;
+            stack.push(reqId);
+          });
+        }
+      });
+
+      Object.keys(invalidSources).forEach(function (sourceIdRaw) {
+        var sourceId = parseInt(sourceIdRaw, 10);
+        var $source = byId[sourceId];
+        if ($source && $source.length && $source.prop('checked')) {
+          $source.prop('checked', false);
+        }
+        var requiredNames = (invalidSources[sourceId] || [])
+          .map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
+        if (requiredNames.length) {
+          errorMessages.push(
+            'No puedes reservar "' +
+            (nameById[sourceId] || ('Equipo #' + sourceId)) +
+            '" porque requiere: ' +
+            requiredNames.join(', ') +
+            '.'
+          );
+        }
+      });
+
+      Object.keys(lockedBySource).forEach(function (sourceIdRaw) {
+        var sourceId = parseInt(sourceIdRaw, 10);
+        if (invalidSources[sourceId]) return;
+        var reqIds = Object.keys(lockedBySource[sourceId])
+          .map(function (x) { return parseInt(x, 10); })
+          .filter(function (x) { return !!x; });
+        if (!reqIds.length) return;
+
+        reqIds.forEach(function (reqId) {
+          var $req = byId[reqId];
+          if (!$req || !$req.length) return;
+          $req.attr('data-cie-locked', '1');
+          $req.closest('label').addClass('cie-option--locked');
+        });
+
+        var reqNames = reqIds.map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
+        infoMessages.push(
+          'Junto con "' +
+          (nameById[sourceId] || ('Equipo #' + sourceId)) +
+          '", también debes reservar: ' +
+          reqNames.join(', ') +
+          '.'
+        );
+      });
+
+      return {
+        infoMessages: infoMessages,
+        errorMessages: errorMessages,
+      };
+    }
+
     function allDisabled(name) {
       var $items = $flow.find('input[type="checkbox"][name="' + name + '"]');
       if (!$items.length) return false;
@@ -208,7 +335,9 @@
         }
         showNotice('spaces', '', 'info');
         showNotice('equipment', '', 'info');
+        showNotice('equipment-deps', '', 'info');
         showNotice('courses', '', 'info');
+        clearEquipmentDependencyLocks();
         toggleStep(5, false);
         toggleStep(6, false);
         setSubmitState(false);
@@ -277,8 +406,19 @@
             } else {
               showNotice('equipment', '', 'info');
             }
+
+            var dep = applyEquipmentDependencies();
+            if (dep.errorMessages.length) {
+              showNotice('equipment-deps', dep.errorMessages.join(' '), 'error');
+            } else if (dep.infoMessages.length) {
+              showNotice('equipment-deps', dep.infoMessages.join(' '), 'info');
+            } else {
+              showNotice('equipment-deps', '', 'info');
+            }
           } else {
             showNotice('equipment', '', 'info');
+            showNotice('equipment-deps', '', 'info');
+            clearEquipmentDependencyLocks();
           }
 
           // Step 5 visibility logic.
@@ -330,6 +470,14 @@
 
     // Bind changes.
     $flow.on('change input', 'input,select,textarea', updateFlow);
+    $flow.on('click', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function (e) {
+      e.preventDefault();
+    });
+    $flow.on('change', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function () {
+      if (!$(this).prop('checked')) {
+        $(this).prop('checked', true);
+      }
+    });
 
     // Init.
     // Hide later steps by default until the logic enables them.

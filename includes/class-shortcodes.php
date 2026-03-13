@@ -249,13 +249,22 @@ final class Shortcodes {
 				<fieldset data-cie-step="4" class="cie-step-card">
 					<legend><?php echo esc_html__('4) Equipos', 'cie-lab-booking'); ?></legend>
 					<div class="cie-lab-booking__notice" data-cie-notice="equipment" style="display:none"></div>
+					<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
 					<?php foreach ($equipment_grouped as $group => $items): ?>
 						<details>
 							<summary><?php echo esc_html(self::group_label($group)); ?></summary>
 							<?php foreach ($items as $eq): ?>
 								<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
+								<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
 								<label class="cie-option">
-									<input type="checkbox" name="equipment[]" value="<?php echo esc_attr($eq->ID); ?>" <?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?> />
+									<input
+										type="checkbox"
+										name="equipment[]"
+										value="<?php echo esc_attr($eq->ID); ?>"
+										data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
+										data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
+										<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
+									/>
 									<?php echo esc_html($eq->post_title); ?>
 									<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
 								</label>
