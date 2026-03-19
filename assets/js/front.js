@@ -13,6 +13,17 @@
       var d = String(dateObj.getDate()).padStart(2, '0');
       return y + '-' + m + '-' + d;
     }
+    function formatDateLongEs(dateStr) {
+      if (!dateStr) return '';
+
+      var date = new Date(dateStr + 'T00:00:00');
+
+      return date.toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    }
 
     var todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
@@ -662,13 +673,13 @@
       if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
       if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
       var primaryResource = resources.length ? resources[0] : 'Reserva';
-      var bookingDates = (b.start_date || '') + ' - ' + (b.end_date || '');
+      var bookingDates = formatDateLongEs(b.start_date) + ' - ' + formatDateLongEs(b.end_date); //(b.start_date || '') + ' - ' + (b.end_date || '');
       var badges = '';
       if (b.spaces && b.spaces.length) {
-        badges += '<span class="cie-resource-badge cie-resource-badge--space">Espacio</span>';
+        badges += '<span class="cie-resource-badge cie-resource-badge--space"><span class="badge-circle"></span>Espacio</span>';
       }
       if (b.equipment && b.equipment.length) {
-        badges += '<span class="cie-resource-badge cie-resource-badge--equipment">Equipo</span>';
+        badges += '<span class="cie-resource-badge cie-resource-badge--equipment"><span class="badge-circle"></span>Equipo</span>';
       }
       if (b.status) {
         badges +=
@@ -692,13 +703,13 @@
 
     function openModalLoading(date) {
       var $m = ensureModal();
-      $m.find('.cie-modal__content').html('<h4>Detalle de ' + date + '</h4><p>Cargando detalle...</p>');
+      $m.find('.cie-modal__content').html('<h4>Detalle de ' + formatDateLongEs(date) + '</h4><p>Cargando detalle...</p>');
       $m.show();
     }
 
     function openModalError(date) {
       var $m = ensureModal();
-      $m.find('.cie-modal__content').html('<h4>Detalle de ' + date + '</h4><p>No se pudo cargar el detalle.</p>');
+      $m.find('.cie-modal__content').html('<small>Detalle de</small><h4>' + formatDateLongEs(date) + '</h4><p>No se pudo cargar el detalle.</p>');
       $m.show();
     }
 
@@ -708,7 +719,7 @@
       var bookings = data.bookings || [];
       var blocks = data.blocks || [];
 
-      var html = '<h4>Detalle de ' + date + '</h4>';
+      var html = '<small>Detalle de</small><h4>' + formatDateLongEs(date) + '</h4>';
       if (!bookings.length && !blocks.length) {
         html += '<p><em>No hay reservas ni bloqueos para este día.</em></p>';
         $c.html(html);
@@ -725,7 +736,7 @@
           html +=
             '<article class="cie-cal-block-card">' +
               '<div><strong>Mantenimiento</strong></div>' +
-              '<div class="cie-cal-muted">' + (b.start_date || '') + ' - ' + (b.end_date || '') + '</div>' +
+              '<div class="cie-cal-muted">' +  formatDateLongEs(b.start_date) + ' - ' + formatDateLongEs(b.end_date)  + '</div>' +
               (r.length ? '<div class="cie-cal-block-card__resources">' + r.join(', ') + '</div>' : '') +
             '</article>';
         });
@@ -796,4 +807,3 @@
     });
   });
 })(jQuery);
-
