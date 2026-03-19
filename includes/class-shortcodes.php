@@ -377,8 +377,8 @@ final class Shortcodes {
 				<style>
 					/* Inline tabs CSS (scoped to this shortcode instance) */
 					#<?php echo esc_html($uid); ?> .cie-inline-tabs__bar{display:flex;gap:8px;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{border:1px solid rgba(15,23,42,.2);background:#fff;color:#0f172a;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:800;font-size:13px;user-select:none}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab.is-active{background:#0ea5e9;border-color:#0284c7;color:#fff}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{padding:8px 12px;cursor:pointer;font-weight:800;font-size:1rem;user-select:none; color:gray;background:white !important; border-radius:0px !important; border:none !important;}
+					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab.is-active{border-bottom:4px black solid !important; color:black;} .cie-inline-tabs__tab:hover { background:#eeeeee !important;}
 					#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{margin-left:auto;display:none;padding:8px 10px;border-radius:10px;border:1px solid rgba(15,23,42,.2);background:#fff}
 					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel{display:none}
 					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel.is-active{display:block}
@@ -709,16 +709,6 @@ final class Shortcodes {
 		ob_start();
 		?>
 		<table class="cie-table">
-			<thead>
-				<tr>
-					<th><?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></th>
-					<th><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
-					<th><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
-					<?php if ($show_actions): ?>
-						<th><?php echo esc_html__('Acciones', 'cie-lab-booking'); ?></th>
-					<?php endif; ?>
-				</tr>
-			</thead>
 			<tbody>
 			<?php foreach ($bookings as $b): ?>
 				<?php
@@ -741,11 +731,12 @@ final class Shortcodes {
 				$can_delete = !in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true);
 				?>
 				<tr>
-					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
+					<!-- <td><?php echo esc_html($start . ' - ' . $end); ?></td> -->
 					<td>
-						<?php echo esc_html(self::resources_summary($spaces, $equipment)); ?>
+						<strong><?php echo esc_html(self::resources_summary($spaces, $equipment)); ?></strong><br/>
+						<small><?php echo esc_html($start . ' - ' . $end); ?></small>
 					</td>
-					<td>
+					<td width="200px;">
 						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr($status_slug); ?>">
 							<?php echo esc_html(self::status_label($status)); ?>
 						</span>
@@ -759,10 +750,10 @@ final class Shortcodes {
 						<?php endif; ?>
 					</td>
 					<?php if ($show_actions): ?>
-						<td class="cie-table__actions">
+						<td class="cie-table__actions" width="200px;" style="text-align: right;">
 							<?php if ($can_edit): ?>
 								<a
-									class="cie-btn cie-booking-edit-link"
+									class="cie-btn cie-btn-edit"
 									href="<?php echo esc_url($edit_url . '#cie-booking-form'); ?>"
 									data-booking-id="<?php echo esc_attr((string) $b->ID); ?>"
 									data-form-url="<?php echo esc_attr($base); ?>"
@@ -775,7 +766,7 @@ final class Shortcodes {
 									<?php wp_nonce_field('cie_my_booking_action', '_wpnonce_cie_my_booking_action'); ?>
 									<input type="hidden" name="cie_my_booking_action" value="delete" />
 									<input type="hidden" name="booking_id" value="<?php echo esc_attr((string) $b->ID); ?>" />
-									<button type="submit" class="cie-btn" onclick="return confirm('<?php echo esc_js(__('¿Eliminar esta reserva?', 'cie-lab-booking')); ?>');">
+									<button type="submit" class="cie-btn-delete" onclick="return confirm('<?php echo esc_js(__('¿Eliminar esta reserva?', 'cie-lab-booking')); ?>');">
 										<?php echo esc_html__('Eliminar', 'cie-lab-booking'); ?>
 									</button>
 								</form>
