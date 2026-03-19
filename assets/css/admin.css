@@ -437,6 +437,18 @@
   color: #7f1d1d;
 }
 
+.cie-scheduler__event-chip.is-resource-combined {
+  border-width: 2px;
+}
+
+.cie-scheduler__event-chip.is-resource-space {
+  border-style: dashed;
+}
+
+.cie-scheduler__event-chip.is-resource-equipment {
+  border-style: solid;
+}
+
 .cie-scheduler__time-grid {
   display: grid;
   gap: 4px;
@@ -471,4 +483,49 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.cie-day-timeline {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.cie-day-timeline__table {
+  display: grid;
+  gap: 4px;
+}
+
+.cie-day-timeline__row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 8px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+}
+
+.cie-day-timeline__row.is-free {
+  border-color: #22c55e;
+  background: #ecfdf5;
+}
+
+.cie-day-timeline__row.is-busy {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.cie-day-timeline__row.is-blocked {
+  border-color: #ef4444;
+  background: #fff1f2;
+}
+
+.cie-day-timeline__hour {
+  font-weight: 700;
+  color: #334155;
+}
+
+.cie-inline-link {
+  text-decoration: underline;
+  cursor: pointer;
 }

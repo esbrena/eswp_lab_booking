@@ -568,6 +568,42 @@
   align-items: flex-end;
 }
 
+.cie-installation-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.cie-installation-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cie-installation-card input[type='radio'] {
+  margin: 0 0 4px 0;
+}
+
+.cie-installation-card.is-active {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+}
+
+.cie-installation-card__title {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-installation-card__desc {
+  font-size: 12px;
+  color: #475569;
+}
+
 .cie-inline-fields > label {
   min-width: 180px;
 }
@@ -584,6 +620,93 @@
   border-radius: 8px;
   padding: 10px;
   background: #f8fafc;
+}
+
+.cie-form-availability {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.cie-form-availability__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cie-form-availability__legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.cie-form-availability__legend span {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+
+.cie-form-availability__legend .is-available {
+  background: #ecfdf5;
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.cie-form-availability__legend .is-busy {
+  background: #fff7ed;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+
+.cie-form-availability__legend .is-blocked {
+  background: #fff1f2;
+  border-color: #ef4444;
+  color: #9f1239;
+}
+
+.cie-form-availability__week-header,
+.cie-form-availability__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cie-form-availability__week-header {
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.cie-form-availability__day {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  min-height: 34px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.cie-form-availability__day.is-available {
+  background: #ecfdf5;
+  border-color: #22c55e;
+}
+
+.cie-form-availability__day.is-busy {
+  background: #fff7ed;
+  border-color: #fb923c;
+}
+
+.cie-form-availability__day.is-blocked {
+  background: #fff1f2;
+  border-color: #ef4444;
+}
+
+.cie-form-availability__day.is-muted {
+  opacity: 0.45;
 }
 
 .cie-slot-grid {
@@ -736,6 +859,18 @@
   color: #7f1d1d;
 }
 
+.cie-scheduler__event-chip.is-resource-combined {
+  border-width: 2px;
+}
+
+.cie-scheduler__event-chip.is-resource-space {
+  border-style: dashed;
+}
+
+.cie-scheduler__event-chip.is-resource-equipment {
+  border-style: solid;
+}
+
 .cie-scheduler__event-more {
   font-size: 11px;
   color: #475569;
@@ -776,6 +911,55 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.cie-day-timeline {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.cie-day-timeline__table {
+  display: grid;
+  gap: 4px;
+}
+
+.cie-day-timeline__row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 8px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+}
+
+.cie-day-timeline__row.is-free {
+  border-color: #22c55e;
+  background: #ecfdf5;
+}
+
+.cie-day-timeline__row.is-busy {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.cie-day-timeline__row.is-blocked {
+  border-color: #ef4444;
+  background: #fff1f2;
+}
+
+.cie-day-timeline__hour {
+  font-weight: 700;
+  color: #334155;
+}
+
+.cie-day-timeline__state {
+  color: #0f172a;
+}
+
+.cie-inline-link {
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 
