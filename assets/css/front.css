@@ -245,9 +245,8 @@
 }
 
 .cie-edit-reservation-info {
-  border: 1px solid #cbd5e1;
+  border-left: 4px solid #cbd5e1;
   background: #f8fafc;
-  border-radius: 10px;
   padding: 10px 12px;
   margin: 10px 0 14px;
   display: grid;
@@ -367,6 +366,9 @@
   width: 32px;
   height: 28px;
 }
+.cie-lab-booking__calendar thead th {
+    border:none !important;
+}
 
 .cie-calendar-day {
   cursor: pointer;
@@ -474,16 +476,32 @@
   border: 1px solid transparent;
 }
 
-.cie-resource-badge--space {
-  background: #fffbeb;
-  border-color: #f59e0b;
-  color: #92400e;
+.cie-resource-badge--space, .cie-resource-badge--equipment  {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.2);
+    background: #f8fafc;
+    color: #0f172a;
+    font-weight: 700;
 }
 
-.cie-resource-badge--equipment {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1e3a8a;
+.cie-resource-badge--space  .badge-circle{
+  background: #f59e0b;
+  width:8px;
+  height:8px;
+  margin-right:8px;
+  display:inline-block;
+  border-radius: 100%;
+}
+.cie-resource-badge--equipment  .badge-circle{
+  background: #3b82f6;
+  width:8px;
+  height:8px;
+  margin-right:8px;
+  display:inline-block;
+  border-radius: 100%;
 }
 
 .cie-cal-booking-list,
@@ -531,5 +549,15 @@
 .cie-cal-block-card__resources {
   margin-top: 4px;
   color: #334155;
+}
+
+.cie-lab-booking__flow label {
+  width:100%;
+}
+.cie-lab-booking__flow label input {
+  margin-top:8px;
+}
+.cie-lab-booking__flow label.cie-option input {
+  margin-top:0px;
 }
 
