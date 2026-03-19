@@ -46,6 +46,7 @@
   color: #0f172a;
   text-decoration: none;
   font-weight: 600;
+  cursor: pointer;
 }
 
 .cie-btn--primary {
@@ -64,6 +65,15 @@
   padding: 10px 10px;
   border-bottom: 1px solid #e2e8f0;
   vertical-align: top;
+}
+
+.cie-table__actions {
+  white-space: nowrap;
+}
+
+.cie-table__actions form {
+  display: inline-block;
+  margin: 0 0 0 6px;
 }
 
 .cie-table thead th {
@@ -234,6 +244,16 @@
   color: #334155;
 }
 
+.cie-edit-reservation-info {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0 14px;
+  display: grid;
+  gap: 6px;
+}
+
 .cie-lab-booking__flow {
   display: grid;
   gap: 12px;
@@ -288,6 +308,15 @@
   background: #fff;
   padding: 8px 10px;
   margin: 6px 0;
+}
+
+.cie-option--locked {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.cie-option--locked input[type='checkbox'] {
+  cursor: not-allowed;
 }
 
 .cie-option small {
@@ -434,5 +463,73 @@
 .cie-cal-muted {
   color: #475569;
   font-size: 13px;
+}
+
+.cie-resource-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.cie-resource-badge--space {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.cie-resource-badge--equipment {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e3a8a;
+}
+
+.cie-cal-booking-list,
+.cie-cal-block-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cie-cal-booking-card,
+.cie-cal-block-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.cie-cal-booking-card__resource {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-cal-booking-card__meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.cie-cal-booking-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cie-cal-booking-card__extra {
+  margin-top: 6px;
+  color: #334155;
+}
+
+.cie-cal-booking-card__actions {
+  margin-top: 8px;
+}
+
+.cie-cal-block-card__resources {
+  margin-top: 4px;
+  color: #334155;
 }
 

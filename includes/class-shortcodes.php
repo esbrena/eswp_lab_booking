@@ -42,7 +42,7 @@ final class Shortcodes {
 			$edit_booking = Bookings::get_booking($edit_booking_id);
 			if ($edit_booking && (int) $edit_booking->post_author === $user_id) {
 				$status = (string) get_post_meta($edit_booking_id, '_cie_booking_status', true);
-				if ($status === Post_Types::BOOKING_STATUS_CHANGES) {
+				if (in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true)) {
 					$edit_admin_message = (string) get_post_meta($edit_booking_id, '_cie_booking_admin_message', true);
 				} else {
 					$edit_booking = null;
@@ -53,6 +53,7 @@ final class Shortcodes {
 				$edit_booking_id = 0;
 			}
 		}
+		$is_edit_mode = $edit_booking_id > 0 && $edit_booking !== null;
 
 		if (!empty($_POST['cie_booking_submit'])) {
 			check_admin_referer('cie_booking_submit', '_wpnonce_cie_booking');
@@ -80,23 +81,41 @@ final class Shortcodes {
 			}
 		}
 
-		// Prefill from existing booking if editing and not yet posted.
-		if ($edit_booking_id && empty($_POST)) {
-			$_POST['start_date'] = (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true);
-			$_POST['end_date'] = (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true);
-			$_POST['spaces'] = (array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true);
-			$_POST['equipment'] = (array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true);
-			$_POST['use_space'] = !empty($_POST['spaces']) ? '1' : '';
-			$_POST['use_equipment'] = !empty($_POST['equipment']) ? '1' : '';
-			$_POST['has_courses'] = 'yes';
-			$_POST['project_name'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_name', true);
-			$_POST['project_duration'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_duration', true);
-			$_POST['project_responsible'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_responsible', true);
-			$_POST['project_ip_email'] = (string) get_post_meta($edit_booking_id, '_cie_booking_project_ip_email', true);
+		// Prefill from existing booking in edit mode when form has not been submitted.
+		if ($is_edit_mode && empty($_POST['cie_booking_submit'])) {
+			$defaults = [
+				'start_date' => (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true),
+				'end_date' => (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true),
+				'spaces' => (array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true),
+				'equipment' => (array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true),
+				'project_name' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_name', true),
+				'project_duration' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_duration', true),
+				'project_responsible' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_responsible', true),
+				'project_ip_email' => (string) get_post_meta($edit_booking_id, '_cie_booking_project_ip_email', true),
+				'has_courses' => 'yes',
+			];
+
+			foreach ($defaults as $key => $value) {
+				$current = $_POST[$key] ?? null;
+				$is_empty_value = is_array($value) ? empty((array) $current) : trim((string) $current) === '';
+				if (!isset($_POST[$key]) || $is_empty_value) {
+					$_POST[$key] = $value;
+				}
+			}
+
+			$_POST['use_space'] = !empty((array) ($_POST['spaces'] ?? [])) ? '1' : '';
+			$_POST['use_equipment'] = !empty((array) ($_POST['equipment'] ?? [])) ? '1' : '';
 		}
 
-		$spaces = Bookings::get_resources('space', true);
-		$equipment_grouped = Bookings::get_equipment_grouped(true);
+		$resources_only_available = !$is_edit_mode;
+		$spaces = Bookings::get_resources('space', $resources_only_available);
+		$equipment_grouped = Bookings::get_equipment_grouped($resources_only_available);
+		$posted_space_ids = array_values(array_map('strval', array_filter(array_map('intval', (array) ($_POST['spaces'] ?? [])))));
+		$posted_equipment_ids = array_values(array_map('strval', array_filter(array_map('intval', (array) ($_POST['equipment'] ?? [])))));
+		$edit_start_date = $is_edit_mode ? (string) get_post_meta($edit_booking_id, '_cie_booking_start_date', true) : '';
+		$edit_end_date = $is_edit_mode ? (string) get_post_meta($edit_booking_id, '_cie_booking_end_date', true) : '';
+		$edit_space_names = $is_edit_mode ? self::resource_names((array) get_post_meta($edit_booking_id, '_cie_booking_spaces', true), 'space') : [];
+		$edit_equipment_names = $is_edit_mode ? self::resource_names((array) get_post_meta($edit_booking_id, '_cie_booking_equipment', true), 'equipment') : [];
 		$range_prefill = trim((string) ($_POST['booking_range'] ?? ''));
 		$posted_start = trim((string) ($_POST['start_date'] ?? ''));
 		$posted_end = trim((string) ($_POST['end_date'] ?? ''));
@@ -106,9 +125,37 @@ final class Shortcodes {
 
 		ob_start();
 		?>
-		<div class="cie-lab-booking">
-			<h3><?php echo esc_html__('Reserva de equipos / espacios', 'cie-lab-booking'); ?></h3>
-			<p><?php echo esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking'); ?></p>
+		<div id="cie-booking-form" class="cie-lab-booking">
+			<h3>
+				<?php
+				echo $is_edit_mode
+					? esc_html__('Editar reserva', 'cie-lab-booking')
+					: esc_html__('Reserva de equipos / espacios', 'cie-lab-booking');
+				?>
+			</h3>
+			<p>
+				<?php
+				echo $is_edit_mode
+					? esc_html__('Revise y actualice los datos de su reserva. Cuando termine, envíe los cambios para que puedan validarse de nuevo.', 'cie-lab-booking')
+					: esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking');
+				?>
+			</p>
+			<?php if ($is_edit_mode): ?>
+				<div class="cie-edit-reservation-info">
+					<div>
+						<strong><?php echo esc_html__('Fecha de la reserva:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_start_date . ' - ' . $edit_end_date); ?>
+					</div>
+					<div>
+						<strong><?php echo esc_html__('Espacios reservados:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_space_names ? implode(', ', $edit_space_names) : __('Ninguno', 'cie-lab-booking')); ?>
+					</div>
+					<div>
+						<strong><?php echo esc_html__('Equipos reservados:', 'cie-lab-booking'); ?></strong>
+						<?php echo esc_html($edit_equipment_names ? implode(', ', $edit_equipment_names) : __('Ninguno', 'cie-lab-booking')); ?>
+					</div>
+				</div>
+			<?php endif; ?>
 
 			<?php if ($edit_admin_message): ?>
 				<p><strong><?php echo esc_html__('Cambios solicitados por el administrador:', 'cie-lab-booking'); ?></strong><br/>
@@ -117,7 +164,9 @@ final class Shortcodes {
 
 			<?php if ($success): ?>
 				<div class="cie-lab-booking__success">
-					<div class="cie-lab-booking__success-title"><?php echo esc_html__('Reserva enviada', 'cie-lab-booking'); ?></div>
+					<div class="cie-lab-booking__success-title">
+						<?php echo esc_html($is_edit_mode ? __('Cambios enviados', 'cie-lab-booking') : __('Reserva enviada', 'cie-lab-booking')); ?>
+					</div>
 					<p><?php echo esc_html($success); ?></p>
 					<div class="cie-lab-booking__success-actions">
 						<?php
@@ -158,14 +207,6 @@ final class Shortcodes {
 				<?php endif; ?>
 
 				<div class="cie-lab-booking__flow" data-cie-booking-flow="1">
-				<div class="cie-lab-booking__steps-indicator">
-					<span>1. <?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></span>
-					<span>2. <?php echo esc_html__('Tipo', 'cie-lab-booking'); ?></span>
-					<span>3. <?php echo esc_html__('Espacios', 'cie-lab-booking'); ?></span>
-					<span>4. <?php echo esc_html__('Equipos', 'cie-lab-booking'); ?></span>
-					<span>5. <?php echo esc_html__('Cursos', 'cie-lab-booking'); ?></span>
-					<span>6. <?php echo esc_html__('Proyecto', 'cie-lab-booking'); ?></span>
-				</div>
 				<fieldset data-cie-step="1" class="cie-step-card">
 					<legend><?php echo esc_html__('1) Seleccione el rango de fechas de la reserva', 'cie-lab-booking'); ?></legend>
 					<p>
@@ -199,7 +240,7 @@ final class Shortcodes {
 					<div class="cie-lab-booking__notice" data-cie-notice="spaces" style="display:none"></div>
 					<?php foreach ($spaces as $space): ?>
 						<label class="cie-option">
-							<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" <?php echo in_array((string) $space->ID, (array) ($_POST['spaces'] ?? []), true) ? 'checked' : ''; ?> />
+							<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
 							<?php echo esc_html($space->post_title); ?>
 						</label>
 					<?php endforeach; ?>
@@ -208,13 +249,22 @@ final class Shortcodes {
 				<fieldset data-cie-step="4" class="cie-step-card">
 					<legend><?php echo esc_html__('4) Equipos', 'cie-lab-booking'); ?></legend>
 					<div class="cie-lab-booking__notice" data-cie-notice="equipment" style="display:none"></div>
+					<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
 					<?php foreach ($equipment_grouped as $group => $items): ?>
 						<details>
 							<summary><?php echo esc_html(self::group_label($group)); ?></summary>
 							<?php foreach ($items as $eq): ?>
 								<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
+								<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
 								<label class="cie-option">
-									<input type="checkbox" name="equipment[]" value="<?php echo esc_attr($eq->ID); ?>" <?php echo in_array((string) $eq->ID, (array) ($_POST['equipment'] ?? []), true) ? 'checked' : ''; ?> />
+									<input
+										type="checkbox"
+										name="equipment[]"
+										value="<?php echo esc_attr($eq->ID); ?>"
+										data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
+										data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
+										<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
+									/>
 									<?php echo esc_html($eq->post_title); ?>
 									<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
 								</label>
@@ -265,7 +315,9 @@ final class Shortcodes {
 				</fieldset>
 
 				<p class="cie-lab-booking__submit" data-cie-submit-wrap style="display:none">
-					<button type="submit" class="cie-btn cie-btn--primary" data-cie-submit><?php echo esc_html__('Enviar reserva', 'cie-lab-booking'); ?></button>
+					<button type="submit" class="cie-btn cie-btn--primary" data-cie-submit>
+						<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
+					</button>
 				</p>
 				</div>
 			</form>
@@ -274,7 +326,7 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 
-	public static function render_my_bookings(): string {
+	public static function render_my_bookings($atts = []): string {
 		// Backwards compatible combined view.
 		if (!is_user_logged_in()) {
 			return '<p>' . esc_html__('Debes iniciar sesión para ver tus reservas.', 'cie-lab-booking') . '</p>';
@@ -283,7 +335,15 @@ final class Shortcodes {
 			return '<p>' . esc_html__('Tu usuario no tiene permisos para ver reservas.', 'cie-lab-booking') . '</p>';
 		}
 
+		$atts = shortcode_atts(
+			[
+				'form_url' => '',
+			],
+			is_array($atts) ? $atts : []
+		);
+
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 
 		$bookings = get_posts([
@@ -311,6 +371,7 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html__('Mis reservas', 'cie-lab-booking'); ?></h3>
+			<?php echo self::render_action_notice($action_notice); ?>
 
 			<div id="<?php echo esc_attr($uid); ?>" class="cie-inline-tabs" data-cie-inline-tabs>
 				<style>
@@ -341,7 +402,7 @@ final class Shortcodes {
 				</div>
 
 				<div class="cie-inline-tabs__panel is-active" role="tabpanel" data-panel="current">
-					<?php echo self::render_booking_list($current); ?>
+					<?php echo self::render_booking_list($current, (string) $atts['form_url'], true); ?>
 				</div>
 				<div class="cie-inline-tabs__panel" role="tabpanel" data-panel="history">
 					<?php echo self::render_booking_list($history); ?>
@@ -441,6 +502,7 @@ final class Shortcodes {
 		);
 
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 		$bookings = get_posts([
 			'post_type' => Post_Types::CPT_BOOKING,
@@ -463,7 +525,8 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
-			<?php echo self::render_booking_list($current, (string) $atts['form_url']); ?>
+			<?php echo self::render_action_notice($action_notice); ?>
+			<?php echo self::render_booking_list($current, (string) $atts['form_url'], true); ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -486,6 +549,7 @@ final class Shortcodes {
 		);
 
 		$user_id = get_current_user_id();
+		$action_notice = self::handle_user_booking_action($user_id);
 		$today = gmdate('Y-m-d');
 		$bookings = get_posts([
 			'post_type' => Post_Types::CPT_BOOKING,
@@ -508,6 +572,7 @@ final class Shortcodes {
 		?>
 		<div class="cie-lab-booking">
 			<h3><?php echo esc_html((string) $atts['title']); ?></h3>
+			<?php echo self::render_action_notice($action_notice); ?>
 			<?php echo self::render_booking_list($history, (string) $atts['form_url']); ?>
 		</div>
 		<?php
@@ -589,16 +654,40 @@ final class Shortcodes {
 		return (string) ob_get_clean();
 	}
 
-	public static function render_calendar(): string {
+	public static function render_calendar($atts = []): string {
+		$atts = shortcode_atts(
+			[
+				'calendar' => 'general',
+			],
+			is_array($atts) ? $atts : []
+		);
+		$calendar_mode = sanitize_key((string) ($atts['calendar'] ?? 'general'));
+		if (!in_array($calendar_mode, ['general', 'current_user'], true)) {
+			$calendar_mode = 'general';
+		}
+
 		// Read-only calendar for users: show 3 months starting current month.
 		$start = gmdate('Y-m-01');
 		$end = gmdate('Y-m-d', strtotime('+3 months -1 day', strtotime($start)));
-		$day_map = Bookings::build_day_map($start, $end);
+		if ($calendar_mode === 'current_user') {
+			if (!is_user_logged_in()) {
+				return '<p>' . esc_html__('Debes iniciar sesión para ver tu calendario de reservas.', 'cie-lab-booking') . '</p>';
+			}
+			$day_map = Bookings::build_day_map_for_user($start, $end, get_current_user_id());
+		} else {
+			$day_map = Bookings::build_day_map($start, $end);
+		}
 
 		ob_start();
 		?>
-		<div class="cie-lab-booking">
-			<h3><?php echo esc_html__('Calendario de reservas (solo lectura)', 'cie-lab-booking'); ?></h3>
+		<div class="cie-lab-booking" data-cie-calendar-scope="<?php echo esc_attr($calendar_mode); ?>">
+			<h3>
+				<?php
+				echo $calendar_mode === 'current_user'
+					? esc_html__('Calendario de mis reservas', 'cie-lab-booking')
+					: esc_html__('Calendario de reservas (solo lectura)', 'cie-lab-booking');
+				?>
+			</h3>
 			<?php echo self::render_calendar_months($start, 3, $day_map); ?>
 		</div>
 		<?php
@@ -606,20 +695,13 @@ final class Shortcodes {
 	}
 
 	private static function group_label(string $group): string {
-		$map = [
-			'recording' => __('Equipos de grabación', 'cie-lab-booking'),
-			'phonetics' => __('Equipos de análisis fonético', 'cie-lab-booking'),
-			'eye-tracker' => __('Equipos de eye-tracker', 'cie-lab-booking'),
-			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
-			'other' => __('Otros', 'cie-lab-booking'),
-		];
-		return $map[$group] ?? $group;
+		return Bookings::get_equipment_group_label($group);
 	}
 
 	/**
 	 * @param array<int,\WP_Post> $bookings
 	 */
-	private static function render_booking_list(array $bookings, string $form_url = ''): string {
+	private static function render_booking_list(array $bookings, string $form_url = '', bool $show_actions = false): string {
 		if (!$bookings) {
 			return '<p><em>' . esc_html__('No hay reservas.', 'cie-lab-booking') . '</em></p>';
 		}
@@ -632,6 +714,9 @@ final class Shortcodes {
 					<th><?php echo esc_html__('Fechas', 'cie-lab-booking'); ?></th>
 					<th><?php echo esc_html__('Recursos', 'cie-lab-booking'); ?></th>
 					<th><?php echo esc_html__('Estado', 'cie-lab-booking'); ?></th>
+					<?php if ($show_actions): ?>
+						<th><?php echo esc_html__('Acciones', 'cie-lab-booking'); ?></th>
+					<?php endif; ?>
 				</tr>
 			</thead>
 			<tbody>
@@ -643,9 +728,17 @@ final class Shortcodes {
 				$admin_message = (string) get_post_meta($b->ID, '_cie_booking_admin_message', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
-				$base = $form_url !== '' ? $form_url : (string) get_permalink();
-				$edit_url = add_query_arg(['booking_id' => (int) $b->ID], $base);
+				$base = self::resolve_form_base_url($form_url);
+				$edit_url = add_query_arg(
+					[
+						'booking_id' => (int) $b->ID,
+						'cie_booking_edit' => '1',
+					],
+					$base
+				);
 				$status_slug = self::status_slug($status);
+				$can_edit = in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true);
+				$can_delete = !in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true);
 				?>
 				<tr>
 					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
@@ -657,12 +750,41 @@ final class Shortcodes {
 							<?php echo esc_html(self::status_label($status)); ?>
 						</span>
 						<?php if ($status === Post_Types::BOOKING_STATUS_CHANGES): ?>
-							<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
+							<?php if (!$show_actions): ?>
+								<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
+							<?php endif; ?>
 							<?php if ($admin_message): ?>
 								<br/><small><?php echo esc_html($admin_message); ?></small>
 							<?php endif; ?>
 						<?php endif; ?>
 					</td>
+					<?php if ($show_actions): ?>
+						<td class="cie-table__actions">
+							<?php if ($can_edit): ?>
+								<a
+									class="cie-btn cie-booking-edit-link"
+									href="<?php echo esc_url($edit_url . '#cie-booking-form'); ?>"
+									data-booking-id="<?php echo esc_attr((string) $b->ID); ?>"
+									data-form-url="<?php echo esc_attr($base); ?>"
+								>
+									<?php echo esc_html__('Editar', 'cie-lab-booking'); ?>
+								</a>
+							<?php endif; ?>
+							<?php if ($can_delete): ?>
+								<form method="post" style="display:inline-block;margin:0;">
+									<?php wp_nonce_field('cie_my_booking_action', '_wpnonce_cie_my_booking_action'); ?>
+									<input type="hidden" name="cie_my_booking_action" value="delete" />
+									<input type="hidden" name="booking_id" value="<?php echo esc_attr((string) $b->ID); ?>" />
+									<button type="submit" class="cie-btn" onclick="return confirm('<?php echo esc_js(__('¿Eliminar esta reserva?', 'cie-lab-booking')); ?>');">
+										<?php echo esc_html__('Eliminar', 'cie-lab-booking'); ?>
+									</button>
+								</form>
+							<?php endif; ?>
+							<?php if (!$can_edit && !$can_delete): ?>
+								—
+							<?php endif; ?>
+						</td>
+					<?php endif; ?>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -747,6 +869,101 @@ final class Shortcodes {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	/**
+	 * @param array<int|string> $resource_ids
+	 * @return array<int,string>
+	 */
+	private static function resource_names(array $resource_ids, string $kind = ''): array {
+		$names = [];
+		foreach ($resource_ids as $rid) {
+			$p = get_post((int) $rid);
+			if (!$p || $p->post_type !== Post_Types::CPT_RESOURCE) {
+				continue;
+			}
+			if ($kind !== '') {
+				$current_kind = (string) get_post_meta((int) $p->ID, '_cie_resource_kind', true);
+				if ($current_kind !== $kind) {
+					continue;
+				}
+			}
+			$names[] = (string) $p->post_title;
+		}
+		return $names;
+	}
+
+	private static function resolve_form_base_url(string $form_url = ''): string {
+		$form_url = trim($form_url);
+		if ($form_url !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $form_url);
+		}
+
+		$referer = wp_get_referer();
+		if (is_string($referer) && $referer !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $referer);
+		}
+
+		$permalink = get_permalink();
+		if (is_string($permalink) && $permalink !== '') {
+			return remove_query_arg(['booking_id', 'cie_booking_edit'], $permalink);
+		}
+
+		return home_url('/');
+	}
+
+	/**
+	 * @return array{type:string,message:string}
+	 */
+	private static function handle_user_booking_action(int $user_id): array {
+		static $handled = null;
+		if (is_array($handled)) {
+			return $handled;
+		}
+
+		$handled = ['type' => '', 'message' => ''];
+		if (empty($_POST['cie_my_booking_action'])) {
+			return $handled;
+		}
+
+		if (empty($_POST['_wpnonce_cie_my_booking_action']) || !wp_verify_nonce((string) $_POST['_wpnonce_cie_my_booking_action'], 'cie_my_booking_action')) {
+			$handled = ['type' => 'error', 'message' => __('No se ha podido procesar la acción (nonce inválido).', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$action = sanitize_key((string) ($_POST['cie_my_booking_action'] ?? ''));
+		$booking_id = (int) ($_POST['booking_id'] ?? 0);
+		if ($action !== 'delete' || $booking_id <= 0) {
+			$handled = ['type' => 'error', 'message' => __('Acción no válida.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$booking = Bookings::get_booking($booking_id);
+		if (!$booking || (int) $booking->post_author !== $user_id) {
+			$handled = ['type' => 'error', 'message' => __('No puede eliminar esta reserva.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
+		if (in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true)) {
+			$handled = ['type' => 'error', 'message' => __('La reserva ya no está activa.', 'cie-lab-booking')];
+			return $handled;
+		}
+
+		Bookings::set_booking_status($booking_id, Post_Types::BOOKING_STATUS_CANCELLED);
+		$handled = ['type' => 'success', 'message' => __('Reserva eliminada correctamente.', 'cie-lab-booking')];
+		return $handled;
+	}
+
+	/**
+	 * @param array{type:string,message:string} $notice
+	 */
+	private static function render_action_notice(array $notice): string {
+		if (empty($notice['type']) || empty($notice['message'])) {
+			return '';
+		}
+		$class = $notice['type'] === 'error' ? 'cie-lab-booking__errors' : 'cie-lab-booking__success';
+		return '<div class="' . esc_attr($class) . '"><p>' . esc_html((string) $notice['message']) . '</p></div>';
 	}
 
 	/**

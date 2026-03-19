@@ -74,8 +74,19 @@ final class Ajax {
 		$is_admin = current_user_can('manage_options');
 		$can_book = Util::current_user_can_book();
 		$user_id = get_current_user_id();
+		$calendar_scope = sanitize_key((string) ($_POST['calendar_scope'] ?? 'general'));
+		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
+			$calendar_scope = 'general';
+		}
+		if ($calendar_scope === 'current_user' && !$user_id) {
+			wp_send_json_error(['message' => __('Debes iniciar sesión para ver este calendario.', 'cie-lab-booking')], 403);
+		}
 
-		$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+		if ($calendar_scope === 'current_user' && $user_id) {
+			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+		} else {
+			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+		}
 		$blocks = Bookings::get_overlapping_blocks($start, $end);
 
 		$booking_items = [];
@@ -93,6 +104,7 @@ final class Ajax {
 				'start_date' => $bs,
 				'end_date' => $be,
 				'status' => $status,
+				'statusSlug' => self::status_slug($status),
 				'spaces' => [],
 				'equipment' => [],
 				'user' => null,
@@ -102,7 +114,7 @@ final class Ajax {
 
 			$owns = $user_id && ((int) $b->post_author === (int) $user_id);
 
-			$can_see_resource_names = $is_admin || $can_book;
+			$can_see_resource_names = $is_admin || $can_book || $calendar_scope === 'current_user' || $owns;
 			if ($can_see_resource_names) {
 				foreach (array_merge((array) $spaces, (array) $equipment) as $rid) {
 					$p = get_post((int) $rid);
@@ -172,8 +184,20 @@ final class Ajax {
 				'isAdmin' => $is_admin,
 				'canBook' => $can_book,
 				'userId' => (int) $user_id,
+				'calendarScope' => $calendar_scope,
 			],
 		]);
+	}
+
+	private static function status_slug(string $status): string {
+		$map = [
+			Post_Types::BOOKING_STATUS_PENDING => 'pending',
+			Post_Types::BOOKING_STATUS_APPROVED => 'approved',
+			Post_Types::BOOKING_STATUS_REJECTED => 'rejected',
+			Post_Types::BOOKING_STATUS_CHANGES => 'changes',
+			Post_Types::BOOKING_STATUS_CANCELLED => 'cancelled',
+		];
+		return $map[$status] ?? 'unknown';
 	}
 }
 

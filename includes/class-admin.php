@@ -93,6 +93,38 @@ final class Admin {
 			wp_die(esc_html__('No tienes permisos.', 'cie-lab-booking'), 403);
 		}
 
+		if (!empty($_POST['cie_lab_booking_group_action'])) {
+			check_admin_referer('cie_lab_booking_manage_groups', '_wpnonce_cie_lab_booking_groups');
+
+			$action = sanitize_key((string) $_POST['cie_lab_booking_group_action']);
+			$group_slug = sanitize_key((string) ($_POST['cie_group_slug'] ?? ''));
+			$group_label = sanitize_text_field((string) ($_POST['cie_group_label'] ?? ''));
+
+			if ($action === 'add') {
+				$group_slug = $group_slug !== '' ? $group_slug : sanitize_title($group_label);
+				if ($group_slug === '') {
+					Util::admin_notice(__('Debe indicar un nombre de grupo válido.', 'cie-lab-booking'), 'error');
+				} else {
+					Bookings::upsert_equipment_group_label($group_slug, $group_label);
+					Util::admin_notice(__('Grupo creado.', 'cie-lab-booking'), 'success');
+				}
+			} elseif ($action === 'update') {
+				if ($group_slug === '') {
+					Util::admin_notice(__('Grupo no válido.', 'cie-lab-booking'), 'error');
+				} else {
+					Bookings::upsert_equipment_group_label($group_slug, $group_label);
+					Util::admin_notice(__('Grupo actualizado.', 'cie-lab-booking'), 'success');
+				}
+			} elseif ($action === 'delete') {
+				if ($group_slug === '' || $group_slug === 'other') {
+					Util::admin_notice(__('No se puede eliminar este grupo.', 'cie-lab-booking'), 'error');
+				} else {
+					Bookings::delete_equipment_group($group_slug, 'other');
+					Util::admin_notice(__('Grupo eliminado. Los equipos asociados se han movido a "Otros".', 'cie-lab-booking'), 'success');
+				}
+			}
+		}
+
 		// Settings: notification email.
 		if (!empty($_POST['cie_lab_booking_save_settings'])) {
 			check_admin_referer('cie_lab_booking_save_settings', '_wpnonce_cie_lab_booking_settings');
@@ -132,6 +164,57 @@ final class Admin {
 		);
 		echo '</label></p>';
 		echo '<p><button class="button button-primary">' . esc_html__('Guardar', 'cie-lab-booking') . '</button></p>';
+		echo '</form>';
+
+		$groups_map = Bookings::get_equipment_groups_map();
+		$group_counts = Bookings::get_equipment_group_resource_counts();
+		echo '<hr/>';
+		echo '<h2>' . esc_html__('Grupos de equipos', 'cie-lab-booking') . '</h2>';
+		echo '<p>' . esc_html__('Desde aquí puede renombrar o eliminar grupos. Al eliminar un grupo, sus equipos pasan automáticamente al grupo "Otros".', 'cie-lab-booking') . '</p>';
+
+		echo '<table class="widefat striped" style="max-width:980px">';
+		echo '<thead><tr>';
+		echo '<th>' . esc_html__('Slug', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Nombre visible', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Equipos', 'cie-lab-booking') . '</th>';
+		echo '<th>' . esc_html__('Acciones', 'cie-lab-booking') . '</th>';
+		echo '</tr></thead><tbody>';
+		foreach ($groups_map as $group_slug => $group_label) {
+			echo '<tr>';
+			echo '<td><code>' . esc_html($group_slug) . '</code></td>';
+			echo '<td>';
+			echo '<form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+			wp_nonce_field('cie_lab_booking_manage_groups', '_wpnonce_cie_lab_booking_groups');
+			echo '<input type="hidden" name="cie_lab_booking_group_action" value="update" />';
+			echo '<input type="hidden" name="cie_group_slug" value="' . esc_attr($group_slug) . '" />';
+			echo '<input type="text" name="cie_group_label" value="' . esc_attr($group_label) . '" style="min-width:220px;" />';
+			echo '<button class="button button-secondary">' . esc_html__('Guardar nombre', 'cie-lab-booking') . '</button>';
+			echo '</form>';
+			echo '</td>';
+			echo '<td>' . (int) ($group_counts[$group_slug] ?? 0) . '</td>';
+			echo '<td>';
+			if ($group_slug !== 'other') {
+				echo '<form method="post" style="display:inline-block">';
+				wp_nonce_field('cie_lab_booking_manage_groups', '_wpnonce_cie_lab_booking_groups');
+				echo '<input type="hidden" name="cie_lab_booking_group_action" value="delete" />';
+				echo '<input type="hidden" name="cie_group_slug" value="' . esc_attr($group_slug) . '" />';
+				echo '<button class="button" onclick="return confirm(\'' . esc_js(__('¿Eliminar grupo?', 'cie-lab-booking')) . '\');">' . esc_html__('Eliminar', 'cie-lab-booking') . '</button>';
+				echo '</form>';
+			} else {
+				echo '—';
+			}
+			echo '</td>';
+			echo '</tr>';
+		}
+		echo '</tbody></table>';
+
+		echo '<h3 style="margin-top:16px;">' . esc_html__('Crear nuevo grupo', 'cie-lab-booking') . '</h3>';
+		echo '<form method="post" style="max-width:680px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">';
+		wp_nonce_field('cie_lab_booking_manage_groups', '_wpnonce_cie_lab_booking_groups');
+		echo '<input type="hidden" name="cie_lab_booking_group_action" value="add" />';
+		echo '<p style="margin:0"><label>' . esc_html__('Nombre visible', 'cie-lab-booking') . '<br/><input type="text" name="cie_group_label" required /></label></p>';
+		echo '<p style="margin:0"><label>' . esc_html__('Slug (opcional)', 'cie-lab-booking') . '<br/><input type="text" name="cie_group_slug" placeholder="' . esc_attr__('se-genera-automaticamente', 'cie-lab-booking') . '" /></label></p>';
+		echo '<p style="margin:0"><button class="button button-primary">' . esc_html__('Crear grupo', 'cie-lab-booking') . '</button></p>';
 		echo '</form>';
 
 		echo '</div>';
@@ -275,8 +358,8 @@ final class Admin {
 					(array) get_post_meta((int) $b->ID, '_cie_booking_equipment', true)
 				);
 				echo '<tr>';
-				echo '<td><a href="' . esc_url($link) . '">' . esc_html($start_b . ' - ' . $end_b) . '</a><br/><small>' . esc_html($b->post_title) . '</small></td>';
-				echo '<td>' . self::status_badge($status) . '<br/>' . self::activity_badge((int) $b->ID) . '</td>';
+				echo '<td><a href="' . esc_url($link) . '">' . esc_html($start_b . ' - ' . $end_b) . '</a> ' . self::activity_badge((int) $b->ID) . '<br/><small>' . esc_html($b->post_title) . '</small></td>';
+				echo '<td>' . self::status_badge($status) . '</td>';
 				echo '<td>' . esc_html($user_name) . '</td>';
 				echo '<td>' . esc_html($resources) . '</td>';
 				echo '</tr>';
@@ -422,6 +505,10 @@ final class Admin {
 		}
 
 		echo '<div class="wrap"><h1>' . esc_html__('Revisar reserva', 'cie-lab-booking') . '</h1>';
+		$edit_post_url = get_edit_post_link($booking_id, '');
+		if ($edit_post_url) {
+			echo '<p><a class="button button-secondary" href="' . esc_url($edit_post_url) . '">' . esc_html__('Editar reserva', 'cie-lab-booking') . '</a></p>';
+		}
 
 		echo '<p><strong>' . esc_html__('Estado:', 'cie-lab-booking') . '</strong> ' . esc_html(self::status_label($status)) . '</p>';
 		echo '<p><strong>' . esc_html__('Fechas:', 'cie-lab-booking') . '</strong> ' . esc_html($start . ' - ' . $end) . '</p>';
@@ -502,13 +589,14 @@ final class Admin {
 		if ($quantity < 1) {
 			$quantity = 1;
 		}
+		$required_equipment = array_values(array_filter(array_map('intval', (array) get_post_meta($post->ID, '_cie_resource_required_equipment', true))));
 
-		$groups = Bookings::get_equipment_groups();
-		if ($group !== '' && !in_array($group, $groups, true)) {
-			$groups[] = $group;
-			sort($groups);
+		$groups_map = Bookings::get_equipment_groups_map();
+		$group = sanitize_key($group);
+		if ($group !== '' && !isset($groups_map[$group])) {
+			$groups_map[$group] = Bookings::get_equipment_group_label($group);
 		}
-		$group_existing = in_array($group, $groups, true) ? $group : '';
+		$group_existing = isset($groups_map[$group]) ? $group : '';
 		$group_new = $group_existing === '' ? $group : '';
 
 		echo '<p><label>' . esc_html__('Tipo', 'cie-lab-booking') . ' ';
@@ -521,12 +609,12 @@ final class Admin {
 		echo '<p><label>' . esc_html__('Grupo de equipo', 'cie-lab-booking') . ' ';
 		echo '<select name="cie_resource_group_existing" data-cie-resource-group-existing="1">';
 		echo '<option value="">' . esc_html__('Seleccione un grupo', 'cie-lab-booking') . '</option>';
-		foreach ($groups as $g) {
+		foreach ($groups_map as $g => $g_label) {
 			printf(
 				'<option value="%1$s" %2$s>%3$s</option>',
 				esc_attr($g),
 				selected($group_existing, $g, false),
-				esc_html(self::equipment_group_label($g))
+				esc_html($g_label)
 			);
 		}
 		echo '<option value="__new__"' . selected($group_existing === '' && $group_new !== '', true, false) . '>' . esc_html__('Crear grupo nuevo…', 'cie-lab-booking') . '</option>';
@@ -539,6 +627,35 @@ final class Admin {
 		echo '<p data-cie-resource-quantity-wrap="1"><label>' . esc_html__('Cantidad disponible', 'cie-lab-booking') . ' ';
 		printf('<input type="number" name="cie_resource_quantity" min="1" step="1" value="%d" />', (int) $quantity);
 		echo '</label> <small>' . esc_html__('Para equipos: cuántas unidades del mismo equipo hay disponibles.', 'cie-lab-booking') . '</small></p>';
+
+		$all_equipment = Bookings::get_resources('equipment', false);
+		echo '<div data-cie-resource-dependency-wrap="1">';
+		echo '<p><strong>' . esc_html__('Interdependencia de equipos', 'cie-lab-booking') . '</strong></p>';
+		echo '<p>' . esc_html__('Si el usuario selecciona este equipo en el formulario, también se seleccionarán automáticamente los equipos marcados aquí y no podrán desmarcarse mientras el equipo principal esté seleccionado.', 'cie-lab-booking') . '</p>';
+		echo '<div class="cie-admin-resource-picker">';
+		if (!$all_equipment) {
+			echo '<p><em>' . esc_html__('No hay equipos disponibles para relacionar.', 'cie-lab-booking') . '</em></p>';
+		} else {
+			$has_options = false;
+			foreach ($all_equipment as $eq) {
+				if ((int) $eq->ID === (int) $post->ID) {
+					continue;
+				}
+				$has_options = true;
+				$checked = in_array((int) $eq->ID, $required_equipment, true) ? 'checked' : '';
+				printf(
+					'<label><input type="checkbox" name="cie_resource_required_equipment[]" value="%1$d" %2$s /> %3$s</label>',
+					(int) $eq->ID,
+					$checked,
+					esc_html((string) $eq->post_title)
+				);
+			}
+			if (!$has_options) {
+				echo '<p><em>' . esc_html__('No hay otros equipos para relacionar.', 'cie-lab-booking') . '</em></p>';
+			}
+		}
+		echo '</div>';
+		echo '</div>';
 
 		echo '<p><label>' . esc_html__('Código/ID', 'cie-lab-booking') . ' ';
 		printf('<input type="text" name="cie_resource_code" value="%s" />', esc_attr($code));
@@ -745,11 +862,13 @@ final class Admin {
 
 			$kind = sanitize_key((string) ($_POST['cie_resource_kind'] ?? ''));
 			$group_existing = sanitize_key((string) ($_POST['cie_resource_group_existing'] ?? ''));
-			$group_new = sanitize_title((string) ($_POST['cie_resource_group_new'] ?? ''));
+			$group_new_label = sanitize_text_field((string) ($_POST['cie_resource_group_new'] ?? ''));
+			$group_new = sanitize_title($group_new_label);
 			$group = '';
 			if ($kind === 'equipment') {
 				if ($group_new !== '') {
 					$group = $group_new;
+					Bookings::upsert_equipment_group_label($group_new, $group_new_label);
 				} elseif ($group_existing !== '' && $group_existing !== '__new__') {
 					$group = $group_existing;
 				}
@@ -763,8 +882,11 @@ final class Admin {
 			$code = sanitize_text_field((string) ($_POST['cie_resource_code'] ?? ''));
 			$available = !empty($_POST['cie_resource_available']) ? '1' : '0';
 			$quantity = max(1, (int) ($_POST['cie_resource_quantity'] ?? 1));
+			$required_equipment = array_values(array_filter(array_map('intval', (array) ($_POST['cie_resource_required_equipment'] ?? []))));
+			$required_equipment = array_values(array_diff($required_equipment, [$post_id]));
 			if ($kind !== 'equipment') {
 				$quantity = 1;
+				$required_equipment = [];
 			}
 
 			update_post_meta($post_id, '_cie_resource_kind', $kind);
@@ -772,6 +894,7 @@ final class Admin {
 			update_post_meta($post_id, '_cie_resource_code', $code);
 			update_post_meta($post_id, '_cie_resource_available', $available);
 			update_post_meta($post_id, '_cie_resource_quantity', $quantity);
+			update_post_meta($post_id, '_cie_resource_required_equipment', $required_equipment);
 		}
 
 		if ($post->post_type === Post_Types::CPT_BLOCK) {
@@ -1211,17 +1334,7 @@ final class Admin {
 	}
 
 	private static function equipment_group_label(string $group): string {
-		$map = [
-			'recording' => __('Equipos de grabación', 'cie-lab-booking'),
-			'phonetics' => __('Equipos de análisis fonético', 'cie-lab-booking'),
-			'eye-tracker' => __('Equipos de eye-tracker', 'cie-lab-booking'),
-			'eeg' => __('Equipos de EEG', 'cie-lab-booking'),
-			'other' => __('Otros', 'cie-lab-booking'),
-		];
-		if (isset($map[$group])) {
-			return $map[$group];
-		}
-		return ucwords(str_replace('-', ' ', $group));
+		return Bookings::get_equipment_group_label($group);
 	}
 
 	private static function resource_kind_label(string $kind): string {
@@ -1266,21 +1379,27 @@ final class Admin {
 	}
 
 	private static function activity_badge(int $booking_id): string {
+		$is_active = self::booking_is_active_today($booking_id);
+		$label = $is_active ? __('Activa', 'cie-lab-booking') : __('No activa', 'cie-lab-booking');
+		$state = $is_active ? 'is-active' : 'is-inactive';
+		return sprintf(
+			'<span class="cie-admin-activity %1$s"><span class="cie-admin-activity__dot" aria-hidden="true"></span>%2$s</span>',
+			esc_attr($state),
+			esc_html($label)
+		);
+	}
+
+	private static function booking_is_active_today(int $booking_id): bool {
 		$today = gmdate('Y-m-d');
 		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
 		$start = (string) get_post_meta($booking_id, '_cie_booking_start_date', true);
 		$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
 
 		if ($status !== Post_Types::BOOKING_STATUS_APPROVED || $start === '' || $end === '') {
-			return '<span class="cie-admin-badge is-muted">' . esc_html__('No activa', 'cie-lab-booking') . '</span>';
+			return false;
 		}
-		if ($start <= $today && $today <= $end) {
-			return '<span class="cie-admin-badge is-active">' . esc_html__('Activa', 'cie-lab-booking') . '</span>';
-		}
-		if ($start > $today) {
-			return '<span class="cie-admin-badge">' . esc_html__('Próxima', 'cie-lab-booking') . '</span>';
-		}
-		return '<span class="cie-admin-badge is-muted">' . esc_html__('Finalizada', 'cie-lab-booking') . '</span>';
+
+		return $start <= $today && $today <= $end;
 	}
 
 	/**

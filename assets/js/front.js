@@ -169,6 +169,133 @@
       return { spacesRemoved: removedSpaces, equipmentRemoved: removedEq };
     }
 
+    function parseRequires($input) {
+      var raw = ($input.attr('data-cie-requires') || '').toString().trim();
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .map(function (x) { return parseInt(String(x), 10); })
+          .filter(function (x) { return !!x; });
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function clearEquipmentDependencyLocks() {
+      $flow.find('input[type="checkbox"][name="equipment[]"]').each(function () {
+        $(this).removeAttr('data-cie-locked');
+        $(this).closest('label').removeClass('cie-option--locked');
+      });
+    }
+
+    function applyEquipmentDependencies() {
+      var $eqInputs = $flow.find('input[type="checkbox"][name="equipment[]"]');
+      var byId = {};
+      var nameById = {};
+      var lockedBySource = {};
+      var invalidSources = {};
+      var infoMessages = [];
+      var errorMessages = [];
+
+      clearEquipmentDependencyLocks();
+
+      $eqInputs.each(function () {
+        var id = parseInt($(this).val(), 10);
+        if (!id) return;
+        byId[id] = $(this);
+        nameById[id] = ($(this).attr('data-cie-equipment-name') || '').toString() || ('Equipo #' + id);
+      });
+
+      var sourceIds = [];
+      $eqInputs.filter(':checked').each(function () {
+        var id = parseInt($(this).val(), 10);
+        if (id) sourceIds.push(id);
+      });
+
+      sourceIds.forEach(function (sourceId) {
+        var stack = [sourceId];
+        var visited = {};
+        while (stack.length) {
+          var currentId = stack.pop();
+          var $current = byId[currentId];
+          if (!$current || !$current.length) continue;
+          var reqIds = parseRequires($current);
+          reqIds.forEach(function (reqId) {
+            if (!reqId || reqId === sourceId) return;
+            if (visited[reqId]) return;
+            visited[reqId] = true;
+
+            var $req = byId[reqId];
+            if (!$req || !$req.length) return;
+            if ($req.prop('disabled')) {
+              invalidSources[sourceId] = invalidSources[sourceId] || [];
+              invalidSources[sourceId].push(reqId);
+              return;
+            }
+
+            if (!$req.prop('checked')) {
+              $req.prop('checked', true);
+            }
+
+            if (!lockedBySource[sourceId]) lockedBySource[sourceId] = {};
+            lockedBySource[sourceId][reqId] = reqId;
+            stack.push(reqId);
+          });
+        }
+      });
+
+      Object.keys(invalidSources).forEach(function (sourceIdRaw) {
+        var sourceId = parseInt(sourceIdRaw, 10);
+        var $source = byId[sourceId];
+        if ($source && $source.length && $source.prop('checked')) {
+          $source.prop('checked', false);
+        }
+        var requiredNames = (invalidSources[sourceId] || [])
+          .map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
+        if (requiredNames.length) {
+          errorMessages.push(
+            'No puedes reservar "' +
+            (nameById[sourceId] || ('Equipo #' + sourceId)) +
+            '" porque requiere: ' +
+            requiredNames.join(', ') +
+            '.'
+          );
+        }
+      });
+
+      Object.keys(lockedBySource).forEach(function (sourceIdRaw) {
+        var sourceId = parseInt(sourceIdRaw, 10);
+        if (invalidSources[sourceId]) return;
+        var reqIds = Object.keys(lockedBySource[sourceId])
+          .map(function (x) { return parseInt(x, 10); })
+          .filter(function (x) { return !!x; });
+        if (!reqIds.length) return;
+
+        reqIds.forEach(function (reqId) {
+          var $req = byId[reqId];
+          if (!$req || !$req.length) return;
+          $req.attr('data-cie-locked', '1');
+          $req.closest('label').addClass('cie-option--locked');
+        });
+
+        var reqNames = reqIds.map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
+        infoMessages.push(
+          'Junto con "' +
+          (nameById[sourceId] || ('Equipo #' + sourceId)) +
+          '", también debes reservar: ' +
+          reqNames.join(', ') +
+          '.'
+        );
+      });
+
+      return {
+        infoMessages: infoMessages,
+        errorMessages: errorMessages,
+      };
+    }
+
     function allDisabled(name) {
       var $items = $flow.find('input[type="checkbox"][name="' + name + '"]');
       if (!$items.length) return false;
@@ -208,7 +335,9 @@
         }
         showNotice('spaces', '', 'info');
         showNotice('equipment', '', 'info');
+        showNotice('equipment-deps', '', 'info');
         showNotice('courses', '', 'info');
+        clearEquipmentDependencyLocks();
         toggleStep(5, false);
         toggleStep(6, false);
         setSubmitState(false);
@@ -277,8 +406,19 @@
             } else {
               showNotice('equipment', '', 'info');
             }
+
+            var dep = applyEquipmentDependencies();
+            if (dep.errorMessages.length) {
+              showNotice('equipment-deps', dep.errorMessages.join(' '), 'error');
+            } else if (dep.infoMessages.length) {
+              showNotice('equipment-deps', dep.infoMessages.join(' '), 'info');
+            } else {
+              showNotice('equipment-deps', '', 'info');
+            }
           } else {
             showNotice('equipment', '', 'info');
+            showNotice('equipment-deps', '', 'info');
+            clearEquipmentDependencyLocks();
           }
 
           // Step 5 visibility logic.
@@ -330,6 +470,14 @@
 
     // Bind changes.
     $flow.on('change input', 'input,select,textarea', updateFlow);
+    $flow.on('click', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function (e) {
+      e.preventDefault();
+    });
+    $flow.on('change', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function () {
+      if (!$(this).prop('checked')) {
+        $(this).prop('checked', true);
+      }
+    });
 
     // Init.
     // Hide later steps by default until the logic enables them.
@@ -340,10 +488,35 @@
     setSubmitState(false);
     updateFlow();
 
+    function buildEditUrl(baseUrl, bookingId) {
+      try {
+        var u = new URL(baseUrl || window.location.href, window.location.href);
+        u.searchParams.set('booking_id', String(bookingId));
+        u.searchParams.set('cie_booking_edit', '1');
+        u.hash = 'cie-booking-form';
+        return u.toString();
+      } catch (err) {
+        var sep = (baseUrl || '').indexOf('?') === -1 ? '?' : '&';
+        return (baseUrl || window.location.href) + sep + 'booking_id=' + encodeURIComponent(String(bookingId)) + '&cie_booking_edit=1#cie-booking-form';
+      }
+    }
+
+    // Works even when booking lists are injected later via AJAX.
+    $(document).on('click', '.cie-booking-edit-link', function (e) {
+      var $link = $(this);
+      var bookingId = parseInt(($link.data('bookingId') || '').toString(), 10);
+      if (!bookingId) return;
+      e.preventDefault();
+      var baseUrl = ($link.data('formUrl') || $link.attr('href') || window.location.href).toString();
+      window.location.assign(buildEditUrl(baseUrl, bookingId));
+    });
+
     // Calendar hover/click details (front + admin calendar shortcode rendered on front).
     var tooltip = null;
     var detailCache = {};
-    var detailXhr = null;
+    var detailInflight = {};
+    var activeTooltipKey = '';
+    var activeModalKey = '';
 
     function ensureTooltip() {
       if (tooltip) return tooltip;
@@ -363,35 +536,79 @@
       return map[status] || status || '';
     }
 
-    function fetchDayDetails(date, cb) {
-      if (detailCache[date]) return cb(detailCache[date]);
-      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) return cb(null);
-      if (detailXhr && detailXhr.abort) detailXhr.abort();
-      detailXhr = $.post(window.CieLabBooking.ajaxUrl, {
+    function statusSlug(status) {
+      var map = {
+        pending: 'pending',
+        approved: 'approved',
+        rejected: 'rejected',
+        changes_requested: 'changes',
+        cancelled: 'cancelled',
+      };
+      return map[status] || 'unknown';
+    }
+
+    function fetchDayDetails(date, calendarScope, cb) {
+      var scope = calendarScope || 'general';
+      var cacheKey = date + '|' + scope;
+
+      if (detailCache[cacheKey]) {
+        cb('success', detailCache[cacheKey]);
+        return;
+      }
+      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
+        cb('error', null);
+        return;
+      }
+      if (detailInflight[cacheKey]) {
+        detailInflight[cacheKey].push(cb);
+        return;
+      }
+
+      detailInflight[cacheKey] = [cb];
+      $.post(window.CieLabBooking.ajaxUrl, {
         action: 'cie_lab_booking_day_details',
         nonce: window.CieLabBooking.nonce,
         date: date,
+        calendar_scope: scope,
       })
         .done(function (res) {
+          var callbacks = detailInflight[cacheKey] || [];
+          delete detailInflight[cacheKey];
           if (res && res.success && res.data) {
-            detailCache[date] = res.data;
-            cb(res.data);
-          } else cb(null);
+            detailCache[cacheKey] = res.data;
+            callbacks.forEach(function (fn) { fn('success', res.data); });
+          } else {
+            callbacks.forEach(function (fn) { fn('error', null); });
+          }
         })
         .fail(function () {
-          cb(null);
+          var callbacks = detailInflight[cacheKey] || [];
+          delete detailInflight[cacheKey];
+          callbacks.forEach(function (fn) { fn('error', null); });
         });
     }
 
-    function renderTooltip(date, data) {
+    function renderTooltipLoading(date) {
       var $t = ensureTooltip();
-      if (!data) {
-        $t.text('No se pudo cargar el detalle.');
-        return;
-      }
+      $t.html('<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div><div class="cie-cal-tooltip__line">Cargando detalle...</div>');
+    }
+
+    function renderTooltipError(date) {
+      var $t = ensureTooltip();
+      $t.html('<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div><div class="cie-cal-tooltip__line">No se pudo mostrar el detalle.</div>');
+    }
+
+    function renderTooltipData(date, data) {
+      var $t = ensureTooltip();
       var bookings = data.bookings || [];
       var blocks = data.blocks || [];
       var html = '<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div>';
+      if (!bookings.length && !blocks.length) {
+        html += '<div class="cie-cal-tooltip__line">Sin reservas ni bloqueos</div>';
+        $t.html(html);
+        return;
+      }
+
       if (blocks.length) {
         var blockResources = [];
         blocks.forEach(function (b) {
@@ -414,8 +631,6 @@
           return true;
         });
         html += '<div class="cie-cal-tooltip__line"><strong>Reservado</strong>: ' + (res.length ? res.slice(0, 3).join(', ') : bookings.length) + (res.length > 3 ? '…' : '') + '</div>';
-      } else {
-        html += '<div class="cie-cal-tooltip__line">Sin reservas</div>';
       }
       $t.html(html);
     }
@@ -442,59 +657,90 @@
       return $m;
     }
 
-    function openModal(date, data) {
+    function renderBookingCard(b) {
+      var resources = [];
+      if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
+      if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
+      var primaryResource = resources.length ? resources[0] : 'Reserva';
+      var bookingDates = (b.start_date || '') + ' - ' + (b.end_date || '');
+      var badges = '';
+      if (b.spaces && b.spaces.length) {
+        badges += '<span class="cie-resource-badge cie-resource-badge--space">Espacio</span>';
+      }
+      if (b.equipment && b.equipment.length) {
+        badges += '<span class="cie-resource-badge cie-resource-badge--equipment">Equipo</span>';
+      }
+      if (b.status) {
+        badges +=
+          '<span class="cie-status-tag cie-status-tag--' +
+          statusSlug(b.status) +
+          '">' +
+          statusLabel(b.status) +
+          '</span>';
+      }
+
+      return (
+        '<article class="cie-cal-booking-card">' +
+          (badges ? '<div class="cie-cal-booking-card__badges">' + badges + '</div>' : '') +
+          '<div class="cie-cal-booking-card__resource">' + primaryResource + '</div>' +
+          '<div class="cie-cal-booking-card__meta">ID #' + (b.id || '') + ' · ' + bookingDates + '</div>' +
+          (resources.length > 1 ? '<div class="cie-cal-booking-card__extra">' + resources.slice(1).join(', ') + '</div>' : '') +
+          (b.detailUrl ? '<div class="cie-cal-booking-card__actions"><a href="' + b.detailUrl + '">Ver detalle</a></div>' : '') +
+        '</article>'
+      );
+    }
+
+    function openModalLoading(date) {
+      var $m = ensureModal();
+      $m.find('.cie-modal__content').html('<h4>Detalle de ' + date + '</h4><p>Cargando detalle...</p>');
+      $m.show();
+    }
+
+    function openModalError(date) {
+      var $m = ensureModal();
+      $m.find('.cie-modal__content').html('<h4>Detalle de ' + date + '</h4><p>No se pudo cargar el detalle.</p>');
+      $m.show();
+    }
+
+    function openModalData(date, data) {
       var $m = ensureModal();
       var $c = $m.find('.cie-modal__content');
-      if (!data) {
-        $c.html('<p>No se pudo cargar el detalle.</p>');
-        $m.show();
-        return;
-      }
       var bookings = data.bookings || [];
       var blocks = data.blocks || [];
 
       var html = '<h4>Detalle de ' + date + '</h4>';
+      if (!bookings.length && !blocks.length) {
+        html += '<p><em>No hay reservas ni bloqueos para este día.</em></p>';
+        $c.html(html);
+        $m.show();
+        return;
+      }
+
       if (blocks.length) {
-        html += '<h5>Mantenimiento</h5><ul>';
+        html += '<h5>Mantenimiento</h5><div class="cie-cal-block-list">';
         blocks.forEach(function (b) {
           var r = [];
           if (b.isGlobal) r.push('Global');
           if (b.resources && b.resources.length) r = r.concat(b.resources);
           html +=
-            '<li>' +
-            (b.start_date || '') +
-            ' - ' +
-            (b.end_date || '') +
-            (r.length ? ' · ' + r.join(', ') : '') +
-            '</li>';
+            '<article class="cie-cal-block-card">' +
+              '<div><strong>Mantenimiento</strong></div>' +
+              '<div class="cie-cal-muted">' + (b.start_date || '') + ' - ' + (b.end_date || '') + '</div>' +
+              (r.length ? '<div class="cie-cal-block-card__resources">' + r.join(', ') + '</div>' : '') +
+            '</article>';
         });
-        html += '</ul>';
+        html += '</div>';
       }
 
       html += '<h5>Reservas</h5>';
       if (!bookings.length) {
         html += '<p><em>No hay reservas.</em></p>';
       } else {
-        html += '<ul class="cie-cal-list">';
+        html += '<div class="cie-cal-booking-list">';
         bookings.forEach(function (b) {
-          var resources = [];
-          if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
-          if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
-          html +=
-            '<li>' +
-            '<div><strong>' +
-            (b.start_date || '') +
-            ' - ' +
-            (b.end_date || '') +
-            '</strong></div>' +
-            '<div class="cie-cal-muted">' +
-            (statusLabel(b.status) ? statusLabel(b.status) + ' · ' : '') +
-            (resources.length ? resources.join(', ') : 'Reservado') +
-            '</div>' +
-            (b.detailUrl ? '<div><a href="' + b.detailUrl + '">Ver detalle</a></div>' : '') +
-            '</li>';
+          html += renderBookingCard(b);
         });
-        html += '</ul>';
+        html += '</div>';
       }
       $c.html(html);
       $m.show();
@@ -504,11 +750,21 @@
     $(document).on('mouseenter', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function (e) {
       var date = $(this).data('cie-date');
       if (!date) return;
+      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
+      var key = date + '|' + scope;
+      activeTooltipKey = key;
       var $t = ensureTooltip();
-      $t.text('Cargando...').show();
+      renderTooltipLoading(date);
+      $t.show();
       $t.css({ left: e.pageX + 12, top: e.pageY + 12, position: 'absolute' });
-      fetchDayDetails(date, function (data) {
-        renderTooltip(date, data);
+
+      fetchDayDetails(date, scope, function (status, data) {
+        if (activeTooltipKey !== key) return;
+        if (status === 'success' && data) {
+          renderTooltipData(date, data);
+        } else {
+          renderTooltipError(date);
+        }
       });
     });
 
@@ -518,14 +774,24 @@
     });
 
     $(document).on('mouseleave', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
+      activeTooltipKey = '';
       if (tooltip) tooltip.hide();
     });
 
     $(document).on('click', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
       var date = $(this).data('cie-date');
       if (!date) return;
-      fetchDayDetails(date, function (data) {
-        openModal(date, data);
+      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
+      var key = date + '|' + scope;
+      activeModalKey = key;
+      openModalLoading(date);
+      fetchDayDetails(date, scope, function (status, data) {
+        if (activeModalKey !== key) return;
+        if (status === 'success' && data) {
+          openModalData(date, data);
+        } else {
+          openModalError(date);
+        }
       });
     });
   });
