@@ -112,6 +112,7 @@ final class Ajax {
 		$mode = sanitize_key((string) ($_POST['booking_mode'] ?? Bookings::BOOKING_MODE_FULL_DAY));
 		$time_start = trim((string) ($_POST['booking_time_start'] ?? ''));
 		$time_end = trim((string) ($_POST['booking_time_end'] ?? ''));
+		$time_slots = array_values(array_filter(array_map('sanitize_text_field', (array) ($_POST['booking_time_slots'] ?? []))));
 
 		$map = [];
 		$cursor = strtotime($start . ' 00:00:00');
@@ -131,6 +132,28 @@ final class Ajax {
 					'end' => $time_end,
 					'full_day' => false,
 				]];
+			}
+			if ($mode === Bookings::BOOKING_MODE_TIME_RANGE && !empty($time_slots)) {
+				$occurrence = [];
+				foreach ($time_slots as $raw_slot) {
+					if (!preg_match('/^(\d{2}\:\d{2})\-(\d{2}\:\d{2})$/', (string) $raw_slot, $matches)) {
+						continue;
+					}
+					$occurrence[] = [
+						'date' => $date,
+						'start' => (string) $matches[1],
+						'end' => (string) $matches[2],
+						'full_day' => false,
+					];
+				}
+				if (empty($occurrence)) {
+					$occurrence = [[
+						'date' => $date,
+						'start' => '',
+						'end' => '',
+						'full_day' => true,
+					]];
+				}
 			}
 			$conflicts = Bookings::find_conflicts_for_occurrences($occurrence, $space_ids, $equipment_ids);
 			$status = 'available';
@@ -295,10 +318,12 @@ final class Ajax {
 			'type' => $booking_type,
 			'mode' => (string) get_post_meta($booking_id, '_cie_booking_mode', true),
 			'frequency' => (string) get_post_meta($booking_id, '_cie_booking_frequency', true),
+			'day_scope' => (string) get_post_meta($booking_id, '_cie_booking_day_scope', true),
 			'start_date' => (string) get_post_meta($booking_id, '_cie_booking_start_date', true),
 			'end_date' => (string) get_post_meta($booking_id, '_cie_booking_end_date', true),
 			'time_start' => (string) get_post_meta($booking_id, '_cie_booking_time_start', true),
 			'time_end' => (string) get_post_meta($booking_id, '_cie_booking_time_end', true),
+			'time_slots' => array_values(array_filter(array_map('strval', (array) get_post_meta($booking_id, '_cie_booking_time_slots', true)))),
 			'spaces' => $space_names,
 			'equipment' => $equipment_names,
 			'resources' => $all_resources,

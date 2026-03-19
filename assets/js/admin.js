@@ -267,7 +267,7 @@
     });
   }
 
-  function openDayDetails(date, scope) {
+  function openDayDetails(date, scope, filters) {
     var $modal = ensureModal();
     $modal.find('.cie-modal__content').html('<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4><p>Cargando...</p>');
     $modal.show();
@@ -285,6 +285,24 @@
       var data = response.data;
       var bookings = Array.isArray(data.bookings) ? data.bookings : [];
       var blocks = Array.isArray(data.blocks) ? data.blocks : [];
+      var resourceFilter = (filters && filters.resourceName) ? String(filters.resourceName) : 'all';
+      var typeFilter = (filters && filters.resourceType) ? String(filters.resourceType) : 'all';
+      if (typeFilter !== 'all') {
+        bookings = bookings.filter(function (booking) {
+          return String(booking.resourceType || 'space') === typeFilter;
+        });
+      }
+      if (resourceFilter !== 'all') {
+        bookings = bookings.filter(function (booking) {
+          var resources = [].concat(booking.spaces || [], booking.equipment || []);
+          return resources.indexOf(resourceFilter) !== -1;
+        });
+        blocks = blocks.filter(function (block) {
+          if (block.isGlobal) return true;
+          if (!Array.isArray(block.resources)) return false;
+          return block.resources.indexOf(resourceFilter) !== -1;
+        });
+      }
       var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
       html += renderTimelineSlots(date, bookings, blocks);
       html += '<h5>Reservas del día</h5>';
@@ -322,7 +340,7 @@
   }
 
   function renderEventChip(event, withTime) {
-    var classes = ['cie-scheduler__event-chip', event.type === 'block' ? 'is-block' : ('is-' + statusSlug(event.statusSlug || event.status)), resourceTypeClass(event.resourceType || '')].join(' ');
+    var classes = ['cie-scheduler__event-chip', event.type === 'block' ? 'is-block' : 'is-booking', resourceTypeClass(event.resourceType || '')].join(' ');
     var label = (withTime && event.start ? event.start + ' ' : '') + (event.title || 'Reserva');
     var attrs = '';
     if (event.type === 'booking' && event.bookingId) attrs = ' data-cie-booking-id="' + event.bookingId + '" role="button" tabindex="0"';
@@ -332,7 +350,14 @@
   function renderScheduler($container) {
     if (!$container.length || !window.CieLabBookingAdmin) return;
     var scope = String($container.attr('data-cie-calendar-scope') || 'general');
-    var state = { view: 'month', current: new Date(), events: [] };
+    var defaultView = String($container.attr('data-cie-default-view') || 'month');
+    var state = {
+      view: (defaultView === 'week' || defaultView === 'day') ? defaultView : 'month',
+      current: new Date(),
+      events: [],
+      filterType: 'all',
+      filterResource: 'all'
+    };
 
     function rangeForView() {
       if (state.view === 'month') return { start: toYmd(monthStart(state.current)), end: toYmd(monthEnd(state.current)) };
@@ -352,15 +377,69 @@
 
     function eventsByDate() {
       var map = {};
-      state.events.forEach(function (event) {
+      filteredEvents().forEach(function (event) {
         if (!map[event.date]) map[event.date] = [];
         map[event.date].push(event);
       });
       return map;
     }
 
+    function resourceOptions() {
+      var seen = {};
+      state.events.forEach(function (event) {
+        (Array.isArray(event.resources) ? event.resources : []).forEach(function (name) {
+          var key = String(name || '').trim();
+          if (!key) return;
+          seen[key] = key;
+        });
+      });
+      return Object.keys(seen).sort();
+    }
+
+    function filteredEvents() {
+      return state.events.filter(function (event) {
+        if (state.filterType !== 'all' && event.type === 'booking' && String(event.resourceType || 'space') !== state.filterType) {
+          return false;
+        }
+        if (state.filterResource !== 'all') {
+          var names = Array.isArray(event.resources) ? event.resources : [];
+          if (event.type === 'block' && event.isGlobal) return true;
+          if (names.indexOf(state.filterResource) === -1) return false;
+        }
+        return true;
+      });
+    }
+
     function renderToolbar() {
-      return '<div class="cie-scheduler__toolbar"><div class="cie-scheduler__nav"><button type="button" data-cie-nav="-1">&larr;</button><button type="button" data-cie-today="1">Hoy</button><button type="button" data-cie-nav="1">&rarr;</button></div><div class="cie-scheduler__views"><button type="button" data-cie-view="month"' + (state.view === 'month' ? ' class="is-active"' : '') + '>Mes</button><button type="button" data-cie-view="week"' + (state.view === 'week' ? ' class="is-active"' : '') + '>Semana</button><button type="button" data-cie-view="day"' + (state.view === 'day' ? ' class="is-active"' : '') + '>Día</button></div></div>';
+      var options = resourceOptions();
+      return (
+        '<div class="cie-scheduler__toolbar">' +
+          '<div class="cie-scheduler__nav">' +
+            '<button type="button" data-cie-nav="-1">&larr;</button>' +
+            '<button type="button" data-cie-today="1">Hoy</button>' +
+            '<button type="button" data-cie-nav="1">&rarr;</button>' +
+          '</div>' +
+          '<div class="cie-scheduler__views">' +
+            '<button type="button" data-cie-view="month"' + (state.view === 'month' ? ' class="is-active"' : '') + '>Mes</button>' +
+            '<button type="button" data-cie-view="week"' + (state.view === 'week' ? ' class="is-active"' : '') + '>Semana</button>' +
+            '<button type="button" data-cie-view="day"' + (state.view === 'day' ? ' class="is-active"' : '') + '>Día</button>' +
+          '</div>' +
+          '<div class="cie-scheduler__filters">' +
+            '<select data-cie-filter-type>' +
+              '<option value="all"' + (state.filterType === 'all' ? ' selected' : '') + '>Todos</option>' +
+              '<option value="combined"' + (state.filterType === 'combined' ? ' selected' : '') + '>Combinada</option>' +
+              '<option value="equipment"' + (state.filterType === 'equipment' ? ' selected' : '') + '>Solo equipo</option>' +
+              '<option value="space"' + (state.filterType === 'space' ? ' selected' : '') + '>Solo espacio</option>' +
+            '</select>' +
+            '<select data-cie-filter-resource>' +
+              '<option value="all"' + (state.filterResource === 'all' ? ' selected' : '') + '>Todos los recursos</option>' +
+              options.map(function (name) {
+                return '<option value="' + escapeHtml(name) + '"' + (state.filterResource === name ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+        '</div>'
+      );
     }
 
     function renderMonth() {
@@ -461,11 +540,24 @@
       state.view = String($(this).attr('data-cie-view') || 'month');
       load();
     });
+    $container.on('change', '[data-cie-filter-type]', function () {
+      state.filterType = String($(this).val() || 'all');
+      render();
+    });
+    $container.on('change', '[data-cie-filter-resource]', function () {
+      state.filterResource = String($(this).val() || 'all');
+      render();
+    });
     $container.on('click', '[data-cie-open-day]', function (event) {
       if ($(event.target).closest('[data-cie-booking-id]').length) return;
       event.preventDefault();
       var date = String($(this).attr('data-cie-open-day') || '');
-      if (date) openDayDetails(date, scope);
+      if (date) {
+        openDayDetails(date, scope, {
+          resourceType: state.filterType,
+          resourceName: state.filterResource
+        });
+      }
     });
     $container.on('click keydown', '[data-cie-booking-id]', function (event) {
       if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;

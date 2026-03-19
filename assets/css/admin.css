@@ -376,6 +376,19 @@
   border-color: #135e96;
 }
 
+.cie-scheduler__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cie-scheduler__filters select {
+  min-height: 30px;
+  border-radius: 8px;
+  border: 1px solid #dbe3ef;
+  padding: 2px 8px;
+}
+
 .cie-scheduler__week-header {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -437,16 +450,22 @@
   color: #7f1d1d;
 }
 
-.cie-scheduler__event-chip.is-resource-combined {
-  border-width: 2px;
+.cie-scheduler__event-chip.is-booking.is-resource-combined {
+  background: #ecfdf5;
+  border-color: #16a34a;
+  color: #14532d;
 }
 
-.cie-scheduler__event-chip.is-resource-space {
-  border-style: dashed;
+.cie-scheduler__event-chip.is-booking.is-resource-equipment {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
 }
 
-.cie-scheduler__event-chip.is-resource-equipment {
-  border-style: solid;
+.cie-scheduler__event-chip.is-booking.is-resource-space {
+  background: #fff7ed;
+  border-color: #f97316;
+  color: #9a3412;
 }
 
 .cie-scheduler__time-grid {

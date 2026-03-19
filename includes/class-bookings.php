@@ -13,6 +13,8 @@ final class Bookings {
 	public const BOOKING_FREQUENCY_SINGLE = 'single';
 	public const BOOKING_FREQUENCY_WEEKLY_REPEAT = 'weekly_repeat';
 	public const BOOKING_FREQUENCY_MANUAL_DATES = 'manual_dates';
+	public const BOOKING_DAY_SCOPE_SINGLE = 'single_day';
+	public const BOOKING_DAY_SCOPE_RANGE = 'date_range';
 	public const BOOKING_TIME_MIN = '08:00';
 	public const BOOKING_TIME_MAX = '20:00';
 
@@ -190,8 +192,34 @@ final class Bookings {
 				'project_ip_email' => $project_ip_email,
 				'booking_mode' => $mode,
 				'booking_frequency' => $frequency,
+				'booking_day_scope' => self::normalize_booking_day_scope((string) ($raw['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE)),
 				'booking_time_start' => $time_start,
 				'booking_time_end' => $time_end,
+				'booking_time_slots' => self::serialize_time_slots(
+					array_values(
+						array_filter(
+							array_map(
+								static function (array $occ): array {
+									return [
+										'start' => (string) ($occ['start'] ?? ''),
+										'end' => (string) ($occ['end'] ?? ''),
+									];
+								},
+								array_values(
+									array_filter(
+										$occurrences,
+										static function (array $occ): bool {
+											return empty($occ['full_day']);
+										}
+									)
+								)
+							),
+							static function (array $slot): bool {
+								return $slot['start'] !== '' && $slot['end'] !== '';
+							}
+						)
+					)
+				),
 				'booking_recurrence_weeks' => max(1, (int) ($raw['booking_recurrence_weeks'] ?? 1)),
 				'booking_weekdays' => self::normalize_weekdays((array) ($raw['booking_weekdays'] ?? [])),
 				'booking_selected_dates' => self::extract_selected_dates_from_raw($raw),
@@ -488,6 +516,14 @@ final class Bookings {
 		return $frequency;
 	}
 
+	private static function normalize_booking_day_scope(string $scope): string {
+		$scope = sanitize_key($scope);
+		if (!in_array($scope, [self::BOOKING_DAY_SCOPE_SINGLE, self::BOOKING_DAY_SCOPE_RANGE], true)) {
+			return self::BOOKING_DAY_SCOPE_SINGLE;
+		}
+		return $scope;
+	}
+
 	private static function normalize_time_hm(string $time): ?string {
 		$time = trim($time);
 		if (!preg_match('/^\d{2}\:\d{2}$/', $time)) {
@@ -507,6 +543,98 @@ final class Bookings {
 		}
 		[$h, $m] = array_map('intval', explode(':', $normalized));
 		return ($h * 60) + $m;
+	}
+
+	/**
+	 * @param array<string,mixed> $raw
+	 * @param array<string> &$errors
+	 * @return array<int,array{start:string,end:string}>
+	 */
+	private static function extract_time_slots_from_request(array $raw, ?string $fallback_start, ?string $fallback_end, array &$errors): array {
+		$min_minutes = self::time_to_minutes(self::BOOKING_TIME_MIN);
+		$max_minutes = self::time_to_minutes(self::BOOKING_TIME_MAX);
+		$slots = [];
+
+		foreach ((array) ($raw['booking_time_slots'] ?? []) as $raw_slot) {
+			$slot = trim((string) $raw_slot);
+			if ($slot === '') {
+				continue;
+			}
+			if (!preg_match('/^(\d{2}\:\d{2})\-(\d{2}\:\d{2})$/', $slot, $matches)) {
+				continue;
+			}
+			$slot_start = self::normalize_time_hm((string) $matches[1]);
+			$slot_end = self::normalize_time_hm((string) $matches[2]);
+			if (!$slot_start || !$slot_end) {
+				continue;
+			}
+			$start_minutes = self::time_to_minutes($slot_start);
+			$end_minutes = self::time_to_minutes($slot_end);
+			if ($start_minutes < $min_minutes || $end_minutes > $max_minutes || $start_minutes >= $end_minutes) {
+				continue;
+			}
+			if (($start_minutes % 60) !== 0 || ($end_minutes % 60) !== 0) {
+				continue;
+			}
+			$key = $slot_start . '-' . $slot_end;
+			$slots[$key] = ['start' => $slot_start, 'end' => $slot_end];
+		}
+
+		if (empty($slots) && $fallback_start && $fallback_end) {
+			$start_minutes = self::time_to_minutes($fallback_start);
+			$end_minutes = self::time_to_minutes($fallback_end);
+			if ($start_minutes >= 0 && $end_minutes >= 0 && $start_minutes < $end_minutes && $start_minutes >= $min_minutes && $end_minutes <= $max_minutes) {
+				if (($start_minutes % 60) === 0 && ($end_minutes % 60) === 0) {
+					$key = $fallback_start . '-' . $fallback_end;
+					$slots[$key] = ['start' => $fallback_start, 'end' => $fallback_end];
+				}
+			}
+		}
+
+		if (empty($slots)) {
+			$errors[] = __('Seleccione al menos un bloque horario válido (08:00-20:00).', 'cie-lab-booking');
+			return [];
+		}
+
+		return array_values($slots);
+	}
+
+	/**
+	 * @param array<int,array{start:string,end:string}> $slots
+	 * @return array<int,string>
+	 */
+	private static function serialize_time_slots(array $slots): array {
+		$out = [];
+		foreach ($slots as $slot) {
+			$start = self::normalize_time_hm((string) ($slot['start'] ?? ''));
+			$end = self::normalize_time_hm((string) ($slot['end'] ?? ''));
+			if (!$start || !$end) {
+				continue;
+			}
+			$out[$start . '-' . $end] = $start . '-' . $end;
+		}
+		return array_values($out);
+	}
+
+	/**
+	 * @param array<int,string> $values
+	 * @return array<int,string>
+	 */
+	private static function normalize_time_slot_values(array $values): array {
+		$normalized = [];
+		foreach ($values as $value) {
+			$slot = trim((string) $value);
+			if (!preg_match('/^(\d{2}\:\d{2})\-(\d{2}\:\d{2})$/', $slot, $matches)) {
+				continue;
+			}
+			$start = self::normalize_time_hm((string) $matches[1]);
+			$end = self::normalize_time_hm((string) $matches[2]);
+			if (!$start || !$end) {
+				continue;
+			}
+			$normalized[$start . '-' . $end] = $start . '-' . $end;
+		}
+		return array_values($normalized);
 	}
 
 	/**
@@ -574,21 +702,12 @@ final class Bookings {
 			$start = $start ?: $range_start;
 			$end = $end ?: $range_end;
 		}
+		$day_scope = self::normalize_booking_day_scope((string) ($raw['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE));
 
 		$needs_time = $mode === self::BOOKING_MODE_TIME_RANGE;
+		$time_slots = [];
 		if ($needs_time) {
-			$min_minutes = self::time_to_minutes(self::BOOKING_TIME_MIN);
-			$max_minutes = self::time_to_minutes(self::BOOKING_TIME_MAX);
-			$start_minutes = self::time_to_minutes((string) $time_start);
-			$end_minutes = self::time_to_minutes((string) $time_end);
-
-			if ($start_minutes < 0 || $end_minutes < 0) {
-				$errors[] = __('Seleccione un rango horario válido.', 'cie-lab-booking');
-			} elseif ($start_minutes < $min_minutes || $end_minutes > $max_minutes || $start_minutes >= $end_minutes) {
-				$errors[] = __('El horario debe estar entre las 08:00 y las 20:00 y la hora final debe ser posterior a la inicial.', 'cie-lab-booking');
-			} elseif (($start_minutes % 60) !== 0 || ($end_minutes % 60) !== 0) {
-				$errors[] = __('Las reservas por horas se realizan en bloques de 1 hora.', 'cie-lab-booking');
-			}
+			$time_slots = self::extract_time_slots_from_request($raw, $time_start, $time_end, $errors);
 		}
 
 		$occurrences = [];
@@ -596,20 +715,23 @@ final class Bookings {
 			if (!$start) {
 				$errors[] = __('Seleccione una fecha de inicio válida.', 'cie-lab-booking');
 			}
-			if ($mode === self::BOOKING_MODE_FULL_DAY) {
-				$end = $end ?: $start;
-				if ($start && $end && $end >= $start) {
-					$occurrences = self::build_full_day_occurrences($start, $end);
-				} elseif ($start && $end && $end < $start) {
-					$errors[] = __('La fecha "hasta" no puede ser anterior a la fecha "desde".', 'cie-lab-booking');
+			if ($start) {
+				$date_list = [$start];
+				if ($day_scope === self::BOOKING_DAY_SCOPE_RANGE) {
+					$end = $end ?: $start;
+					if ($end && $end >= $start) {
+						$date_list = self::normalize_date_list(self::build_date_range($start, $end));
+					} elseif ($end && $end < $start) {
+						$errors[] = __('La fecha "hasta" no puede ser anterior a la fecha "desde".', 'cie-lab-booking');
+					}
 				}
-			} elseif ($start && $time_start && $time_end) {
-				$occurrences[] = [
-					'date' => $start,
-					'start' => $time_start,
-					'end' => $time_end,
-					'full_day' => false,
-				];
+				if ($mode === self::BOOKING_MODE_FULL_DAY) {
+					foreach ($date_list as $date) {
+						$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
+					}
+				} else {
+					$occurrences = array_merge($occurrences, self::build_time_occurrences($date_list, $time_slots));
+				}
 			}
 		} elseif ($frequency === self::BOOKING_FREQUENCY_WEEKLY_REPEAT) {
 			if (!$start) {
@@ -628,12 +750,11 @@ final class Bookings {
 					if (!in_array($weekday, $weekdays, true)) {
 						continue;
 					}
-					$occurrences[] = [
-						'date' => $date,
-						'start' => $mode === self::BOOKING_MODE_TIME_RANGE ? (string) $time_start : '',
-						'end' => $mode === self::BOOKING_MODE_TIME_RANGE ? (string) $time_end : '',
-						'full_day' => $mode === self::BOOKING_MODE_FULL_DAY,
-					];
+					if ($mode === self::BOOKING_MODE_FULL_DAY) {
+						$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
+					} else {
+						$occurrences = array_merge($occurrences, self::build_time_occurrences([$date], $time_slots));
+					}
 				}
 			}
 		} else {
@@ -641,13 +762,12 @@ final class Bookings {
 			if (!$selected_dates) {
 				$errors[] = __('Seleccione al menos una fecha para la reserva.', 'cie-lab-booking');
 			}
-			foreach ($selected_dates as $date) {
-				$occurrences[] = [
-					'date' => $date,
-					'start' => $mode === self::BOOKING_MODE_TIME_RANGE ? (string) $time_start : '',
-					'end' => $mode === self::BOOKING_MODE_TIME_RANGE ? (string) $time_end : '',
-					'full_day' => $mode === self::BOOKING_MODE_FULL_DAY,
-				];
+			if ($mode === self::BOOKING_MODE_FULL_DAY) {
+				foreach ($selected_dates as $date) {
+					$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
+				}
+			} else {
+				$occurrences = array_merge($occurrences, self::build_time_occurrences($selected_dates, $time_slots));
 			}
 		}
 
@@ -656,6 +776,50 @@ final class Bookings {
 			$errors[] = __('La reserva excede el número máximo de ocurrencias permitidas (180).', 'cie-lab-booking');
 		}
 
+		return $occurrences;
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function build_date_range(string $start, string $end): array {
+		$start = Util::normalize_date_ymd($start) ?: '';
+		$end = Util::normalize_date_ymd($end) ?: '';
+		if ($start === '' || $end === '' || $end < $start) {
+			return [];
+		}
+		$dates = [];
+		$cursor = strtotime($start . ' 00:00:00');
+		$end_ts = strtotime($end . ' 00:00:00');
+		while ($cursor <= $end_ts) {
+			$dates[] = gmdate('Y-m-d', $cursor);
+			$cursor = strtotime('+1 day', $cursor);
+		}
+		return $dates;
+	}
+
+	/**
+	 * @param array<int,string> $dates
+	 * @param array<int,array{start:string,end:string}> $slots
+	 * @return array<int,array{date:string,start:string,end:string,full_day:bool}>
+	 */
+	private static function build_time_occurrences(array $dates, array $slots): array {
+		$occurrences = [];
+		foreach (self::normalize_date_list($dates) as $date) {
+			foreach ($slots as $slot) {
+				$slot_start = self::normalize_time_hm((string) ($slot['start'] ?? ''));
+				$slot_end = self::normalize_time_hm((string) ($slot['end'] ?? ''));
+				if (!$slot_start || !$slot_end) {
+					continue;
+				}
+				$occurrences[] = [
+					'date' => $date,
+					'start' => $slot_start,
+					'end' => $slot_end,
+					'full_day' => false,
+				];
+			}
+		}
 		return $occurrences;
 	}
 
@@ -748,15 +912,30 @@ final class Bookings {
 			$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
 			$mode = self::normalize_booking_mode((string) get_post_meta($booking_id, '_cie_booking_mode', true));
 			if ($mode === self::BOOKING_MODE_TIME_RANGE) {
-				$time_start = self::normalize_time_hm((string) get_post_meta($booking_id, '_cie_booking_time_start', true)) ?: '';
-				$time_end = self::normalize_time_hm((string) get_post_meta($booking_id, '_cie_booking_time_end', true)) ?: '';
-				if ($start !== '' && $time_start !== '' && $time_end !== '') {
-					$occurrences = [[
-						'date' => $start,
-						'start' => $time_start,
-						'end' => $time_end,
-						'full_day' => false,
-					]];
+				$date_scope = self::normalize_booking_day_scope((string) get_post_meta($booking_id, '_cie_booking_day_scope', true));
+				$date_list = [$start];
+				if ($date_scope === self::BOOKING_DAY_SCOPE_RANGE && $start !== '' && $end !== '' && $end >= $start) {
+					$date_list = self::build_date_range($start, $end);
+				}
+				$slots_meta = self::normalize_time_slot_values((array) get_post_meta($booking_id, '_cie_booking_time_slots', true));
+				$slots = [];
+				foreach ($slots_meta as $slot_value) {
+					if (preg_match('/^(\d{2}\:\d{2})\-(\d{2}\:\d{2})$/', $slot_value, $matches)) {
+						$slots[] = [
+							'start' => (string) $matches[1],
+							'end' => (string) $matches[2],
+						];
+					}
+				}
+				if (!$slots) {
+					$time_start = self::normalize_time_hm((string) get_post_meta($booking_id, '_cie_booking_time_start', true)) ?: '';
+					$time_end = self::normalize_time_hm((string) get_post_meta($booking_id, '_cie_booking_time_end', true)) ?: '';
+					if ($time_start !== '' && $time_end !== '') {
+						$slots[] = ['start' => $time_start, 'end' => $time_end];
+					}
+				}
+				if ($date_list && $slots) {
+					$occurrences = self::build_time_occurrences($date_list, $slots);
 				}
 			}
 			if (!$occurrences) {
@@ -1136,8 +1315,10 @@ final class Bookings {
 		update_post_meta($post_id, '_cie_booking_project_ip_email', $data['project_ip_email']);
 		update_post_meta($post_id, '_cie_booking_mode', (string) ($data['booking_mode'] ?? self::BOOKING_MODE_FULL_DAY));
 		update_post_meta($post_id, '_cie_booking_frequency', (string) ($data['booking_frequency'] ?? self::BOOKING_FREQUENCY_SINGLE));
+		update_post_meta($post_id, '_cie_booking_day_scope', (string) ($data['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE));
 		update_post_meta($post_id, '_cie_booking_time_start', (string) ($data['booking_time_start'] ?? ''));
 		update_post_meta($post_id, '_cie_booking_time_end', (string) ($data['booking_time_end'] ?? ''));
+		update_post_meta($post_id, '_cie_booking_time_slots', self::normalize_time_slot_values((array) ($data['booking_time_slots'] ?? [])));
 		update_post_meta($post_id, '_cie_booking_recurrence_weeks', max(1, (int) ($data['booking_recurrence_weeks'] ?? 1)));
 		update_post_meta($post_id, '_cie_booking_weekdays', self::normalize_weekdays((array) ($data['booking_weekdays'] ?? [])));
 		update_post_meta($post_id, '_cie_booking_selected_dates', self::normalize_date_list((array) ($data['booking_selected_dates'] ?? [])));
@@ -1177,8 +1358,10 @@ final class Bookings {
 		update_post_meta($booking_id, '_cie_booking_project_ip_email', $data['project_ip_email']);
 		update_post_meta($booking_id, '_cie_booking_mode', (string) ($data['booking_mode'] ?? self::BOOKING_MODE_FULL_DAY));
 		update_post_meta($booking_id, '_cie_booking_frequency', (string) ($data['booking_frequency'] ?? self::BOOKING_FREQUENCY_SINGLE));
+		update_post_meta($booking_id, '_cie_booking_day_scope', (string) ($data['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE));
 		update_post_meta($booking_id, '_cie_booking_time_start', (string) ($data['booking_time_start'] ?? ''));
 		update_post_meta($booking_id, '_cie_booking_time_end', (string) ($data['booking_time_end'] ?? ''));
+		update_post_meta($booking_id, '_cie_booking_time_slots', self::normalize_time_slot_values((array) ($data['booking_time_slots'] ?? [])));
 		update_post_meta($booking_id, '_cie_booking_recurrence_weeks', max(1, (int) ($data['booking_recurrence_weeks'] ?? 1)));
 		update_post_meta($booking_id, '_cie_booking_weekdays', self::normalize_weekdays((array) ($data['booking_weekdays'] ?? [])));
 		update_post_meta($booking_id, '_cie_booking_selected_dates', self::normalize_date_list((array) ($data['booking_selected_dates'] ?? [])));

@@ -561,6 +561,23 @@
   margin-top:0px;
 }
 
+.cie-booking-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.cie-booking-layout__calendar h4 {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 980px) {
+  .cie-booking-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .cie-inline-fields {
   display: flex;
   flex-wrap: wrap;
@@ -737,6 +754,21 @@
   border-color: #fb7185;
 }
 
+.cie-slot-chip.is-selected {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.cie-slot-selector {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cie-slot-selector .cie-slot-chip input {
+  margin: 0 6px 0 0;
+}
+
 .cie-scheduler {
   border: 1px solid #dbe3ef;
   border-radius: 12px;
@@ -757,6 +789,19 @@
 .cie-scheduler__views {
   display: flex;
   gap: 6px;
+}
+
+.cie-scheduler__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cie-scheduler__filters select {
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid #dbe3ef;
+  padding: 4px 8px;
 }
 
 .cie-scheduler__nav button,
@@ -859,16 +904,22 @@
   color: #7f1d1d;
 }
 
-.cie-scheduler__event-chip.is-resource-combined {
-  border-width: 2px;
+.cie-scheduler__event-chip.is-booking.is-resource-combined {
+  background: #ecfdf5;
+  border-color: #16a34a;
+  color: #14532d;
 }
 
-.cie-scheduler__event-chip.is-resource-space {
-  border-style: dashed;
+.cie-scheduler__event-chip.is-booking.is-resource-equipment {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
 }
 
-.cie-scheduler__event-chip.is-resource-equipment {
-  border-style: solid;
+.cie-scheduler__event-chip.is-booking.is-resource-space {
+  background: #fff7ed;
+  border-color: #f97316;
+  color: #9a3412;
 }
 
 .cie-scheduler__event-more {
