@@ -258,16 +258,7 @@ final class Admin {
 			}
 		}
 
-		$month = isset($_GET['month']) ? preg_replace('/[^0-9\-]/', '', (string) $_GET['month']) : gmdate('Y-m');
-		if (!preg_match('/^\d{4}\-\d{2}$/', $month)) {
-			$month = gmdate('Y-m');
-		}
 		$booking_status_filter = isset($_GET['booking_status']) ? sanitize_key((string) $_GET['booking_status']) : '';
-
-		// Admin calendar: show 3 months (same as front), starting from selected month.
-		$start = $month . '-01';
-		$end = gmdate('Y-m-d', strtotime('+3 months -1 day', strtotime($start)));
-		$day_map = Bookings::build_day_map($start, $end);
 
 		$bookings_query = [
 			'post_type' => Post_Types::CPT_BOOKING,
@@ -288,23 +279,9 @@ final class Admin {
 
 		echo '<div class="wrap"><h1>' . esc_html__('Calendario y reservas', 'cie-lab-booking') . '</h1>';
 
-		// Month selector (up to 24 months ahead).
+		// Booking list filter toolbar.
 		echo '<form method="get" class="cie-admin-calendar-toolbar">';
 		echo '<input type="hidden" name="page" value="cie-lab-booking-calendar" />';
-		echo '<label>' . esc_html__('Mes', 'cie-lab-booking') . ' ';
-		echo '<select name="month">';
-		$base = strtotime(gmdate('Y-m-01') . ' 00:00:00');
-		for ($i = 0; $i <= 24; $i++) {
-			$ts = strtotime('+' . $i . ' months', $base);
-			$val = gmdate('Y-m', $ts);
-			printf(
-				'<option value="%1$s" %2$s>%3$s</option>',
-				esc_attr($val),
-				selected($val, $month, false),
-				esc_html(date_i18n('F Y', $ts))
-			);
-		}
-		echo '</select></label> ';
 		echo '<label>' . esc_html__('Estado reserva', 'cie-lab-booking') . ' ';
 		echo '<select name="booking_status">';
 		printf('<option value="">%s</option>', esc_html__('Todos', 'cie-lab-booking'));
@@ -319,18 +296,13 @@ final class Admin {
 
 		echo '<div class="cie-admin-calendar-layout">';
 		echo '<section class="cie-admin-calendar-layout__left">';
-
-		// Legend.
 		echo '<div class="cie-lab-booking-admin__legend">';
-		self::legend_item('#e5e7eb', __('Sin reservas', 'cie-lab-booking'));
 		self::legend_item('#f59e0b', __('Reserva de espacios', 'cie-lab-booking'));
 		self::legend_item('#3b82f6', __('Reserva de equipos', 'cie-lab-booking'));
-		self::legend_item('#22c55e', __('Espacios + equipos', 'cie-lab-booking'));
-		self::legend_item('#ef4444', __('No disponible (mantenimiento)', 'cie-lab-booking'));
+		self::legend_item('#22c55e', __('Reserva combinada', 'cie-lab-booking'));
+		self::legend_item('#ef4444', __('Mantenimiento', 'cie-lab-booking'));
 		echo '</div>';
-
-		// Calendar for 3 months (like front).
-		echo self::render_calendar_months($start, 3, $day_map);
+		echo '<div class="cie-scheduler" data-cie-scheduler="1" data-cie-calendar-scope="general" data-cie-calendar-context="admin"></div>';
 		echo '</section>';
 
 		echo '<aside class="cie-admin-calendar-layout__right">';
@@ -440,7 +412,8 @@ final class Admin {
 			$message = sanitize_textarea_field((string) ($_POST['cie_booking_admin_message'] ?? ''));
 
 			if ($action === 'approve') {
-				$conflicts = Bookings::find_conflicts($start, $end, array_map('intval', $spaces), array_map('intval', $equipment), $booking_id);
+				$occurrences = Bookings::get_booking_occurrences($booking_id);
+				$conflicts = Bookings::find_conflicts_for_occurrences($occurrences, array_map('intval', $spaces), array_map('intval', $equipment), $booking_id);
 				if (!empty($conflicts['spaces']) || !empty($conflicts['equipment']) || !empty($conflicts['blocked'])) {
 					Util::admin_notice(__('La reserva no puede validarse porque entra en conflicto con reservas ya validadas o con un bloqueo de mantenimiento.', 'cie-lab-booking'), 'error');
 				} else {
@@ -764,7 +737,7 @@ final class Admin {
 
 		$conflicts = [];
 		if ($start && $end && $end >= $start) {
-			$conf = Bookings::find_conflicts($start, $end, array_map('intval', (array) $spaces), array_map('intval', (array) $equipment), $booking_id);
+			$conf = Bookings::find_conflicts_for_occurrences(Bookings::get_booking_occurrences($booking_id), array_map('intval', (array) $spaces), array_map('intval', (array) $equipment), $booking_id);
 			if (!empty($conf['spaces']) || !empty($conf['equipment']) || !empty($conf['blocked'])) {
 				$conflicts = $conf;
 			}
@@ -973,7 +946,7 @@ final class Admin {
 			$start_eff = $start ?: (string) get_post_meta($post_id, '_cie_booking_start_date', true);
 			$end_eff = $end ?: (string) get_post_meta($post_id, '_cie_booking_end_date', true);
 			if ($status === Post_Types::BOOKING_STATUS_APPROVED && $start_eff && $end_eff && $end_eff >= $start_eff) {
-				$conf = Bookings::find_conflicts($start_eff, $end_eff, $spaces, $equipment, $post_id);
+				$conf = Bookings::find_conflicts_for_occurrences(Bookings::get_booking_occurrences($post_id), $spaces, $equipment, $post_id);
 				if (!empty($conf['spaces']) || !empty($conf['equipment']) || !empty($conf['blocked'])) {
 					$status = Post_Types::BOOKING_STATUS_PENDING;
 				}
@@ -1392,14 +1365,10 @@ final class Admin {
 	private static function booking_is_active_today(int $booking_id): bool {
 		$today = gmdate('Y-m-d');
 		$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
-		$start = (string) get_post_meta($booking_id, '_cie_booking_start_date', true);
-		$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
-
-		if ($status !== Post_Types::BOOKING_STATUS_APPROVED || $start === '' || $end === '') {
+		if ($status !== Post_Types::BOOKING_STATUS_APPROVED) {
 			return false;
 		}
-
-		return $start <= $today && $today <= $end;
+		return Bookings::booking_has_occurrence_on_date($booking_id, $today);
 	}
 
 	/**

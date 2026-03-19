@@ -10,10 +10,13 @@ final class Ajax {
 	public static function init(): void {
 		// Availability checks used by the booking form flow.
 		add_action('wp_ajax_cie_lab_booking_availability', [self::class, 'availability']);
+		add_action('wp_ajax_cie_lab_booking_time_slots', [self::class, 'time_slots']);
 
 		// Calendar hover / click details (front + admin).
 		add_action('wp_ajax_cie_lab_booking_day_details', [self::class, 'day_details']);
 		add_action('wp_ajax_nopriv_cie_lab_booking_day_details', [self::class, 'day_details']);
+		add_action('wp_ajax_cie_lab_booking_calendar_feed', [self::class, 'calendar_feed']);
+		add_action('wp_ajax_nopriv_cie_lab_booking_calendar_feed', [self::class, 'calendar_feed']);
 	}
 
 	private static function verify_any_nonce(array $nonces): bool {
@@ -56,6 +59,129 @@ final class Ajax {
 			'blocked' => $availability['blocked'],
 			'spaces' => $availability['spaces'], // id => bool
 			'equipment' => $availability['equipment'], // id => bool
+		]);
+	}
+
+	public static function time_slots(): void {
+		Util::require_booking_user();
+
+		if (!self::verify_any_nonce(['cie_lab_booking'])) {
+			wp_send_json_error(['message' => __('Nonce inválido.', 'cie-lab-booking')], 403);
+		}
+
+		$date = Util::normalize_date_ymd((string) ($_POST['date'] ?? ''));
+		if (!$date) {
+			wp_send_json_error(['message' => __('Fecha inválida.', 'cie-lab-booking')], 400);
+		}
+
+		$space_ids = array_values(array_filter(array_map('intval', (array) ($_POST['spaces'] ?? []))));
+		$equipment_ids = array_values(array_filter(array_map('intval', (array) ($_POST['equipment'] ?? []))));
+		if (!$space_ids && !$equipment_ids) {
+			wp_send_json_error(['message' => __('Seleccione al menos un recurso.', 'cie-lab-booking')], 400);
+		}
+
+		$slots = Bookings::get_daily_time_slots_availability($date, $space_ids, $equipment_ids);
+		wp_send_json_success([
+			'date' => $date,
+			'slots' => $slots,
+		]);
+	}
+
+	public static function calendar_feed(): void {
+		if (!self::verify_any_nonce(['cie_lab_booking', 'cie_lab_booking_admin'])) {
+			wp_send_json_error(['message' => __('Nonce inválido.', 'cie-lab-booking')], 403);
+		}
+
+		$start = Util::normalize_date_ymd((string) ($_POST['start_date'] ?? ''));
+		$end = Util::normalize_date_ymd((string) ($_POST['end_date'] ?? ''));
+		if (!$start || !$end || $end < $start) {
+			wp_send_json_error(['message' => __('Rango de fechas inválido.', 'cie-lab-booking')], 400);
+		}
+
+		$is_admin = current_user_can('manage_options');
+		$user_id = get_current_user_id();
+		$calendar_scope = sanitize_key((string) ($_POST['calendar_scope'] ?? 'general'));
+		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
+			$calendar_scope = 'general';
+		}
+		if ($calendar_scope === 'current_user' && !$user_id) {
+			wp_send_json_error(['message' => __('Debes iniciar sesión para ver este calendario.', 'cie-lab-booking')], 403);
+		}
+
+		if ($calendar_scope === 'current_user' && $user_id) {
+			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+		} else {
+			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+		}
+
+		$events = [];
+		foreach ($bookings as $booking) {
+			$booking_id = (int) $booking->ID;
+			$status = (string) get_post_meta($booking_id, '_cie_booking_status', true);
+			$spaces = (array) get_post_meta($booking_id, '_cie_booking_spaces', true);
+			$equipment = (array) get_post_meta($booking_id, '_cie_booking_equipment', true);
+			$resource_names = self::resource_names(array_merge($spaces, $equipment));
+			$occurrences = Bookings::get_booking_occurrences($booking_id, $start, $end);
+			$user = get_user_by('id', (int) $booking->post_author);
+
+			foreach ($occurrences as $index => $occ) {
+				$full_day = !empty($occ['full_day']);
+				$events[] = [
+					'id' => 'booking-' . $booking_id . '-' . $index,
+					'type' => 'booking',
+					'bookingId' => $booking_id,
+					'date' => (string) $occ['date'],
+					'start' => $full_day ? '' : (string) ($occ['start'] ?? ''),
+					'end' => $full_day ? '' : (string) ($occ['end'] ?? ''),
+					'fullDay' => $full_day,
+					'title' => !empty($resource_names) ? $resource_names[0] : (string) __('Reserva', 'cie-lab-booking'),
+					'resources' => $resource_names,
+					'status' => $status,
+					'statusSlug' => self::status_slug($status),
+					'user' => $is_admin && $user ? (string) $user->display_name : '',
+					'detailUrl' => $is_admin ? admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . $booking_id) : null,
+				];
+			}
+		}
+
+		$blocks = Bookings::get_overlapping_blocks($start, $end);
+		foreach ($blocks as $block) {
+			$block_id = (int) $block->ID;
+			$block_start = Util::normalize_date_ymd((string) get_post_meta($block_id, '_cie_block_start_date', true)) ?: '';
+			$block_end = Util::normalize_date_ymd((string) get_post_meta($block_id, '_cie_block_end_date', true)) ?: '';
+			if ($block_start === '' || $block_end === '' || $block_end < $block_start) {
+				continue;
+			}
+			$cursor = max(strtotime($start . ' 00:00:00'), strtotime($block_start . ' 00:00:00'));
+			$last = min(strtotime($end . ' 00:00:00'), strtotime($block_end . ' 00:00:00'));
+			$blocked_ids = array_values(array_filter(array_map('intval', (array) get_post_meta($block_id, '_cie_block_resource_ids', true))));
+			$is_global = !$blocked_ids;
+			$resource_names = $is_global ? [(string) __('Todos los recursos', 'cie-lab-booking')] : self::resource_names($blocked_ids);
+			while ($cursor <= $last) {
+				$day = gmdate('Y-m-d', $cursor);
+				$events[] = [
+					'id' => 'block-' . $block_id . '-' . $day,
+					'type' => 'block',
+					'bookingId' => 0,
+					'date' => $day,
+					'start' => '',
+					'end' => '',
+					'fullDay' => true,
+					'title' => (string) __('Mantenimiento', 'cie-lab-booking'),
+					'resources' => $resource_names,
+					'status' => 'blocked',
+					'statusSlug' => 'blocked',
+					'user' => '',
+					'detailUrl' => $is_admin ? get_edit_post_link($block_id, '') : null,
+				];
+				$cursor = strtotime('+1 day', $cursor);
+			}
+		}
+
+		wp_send_json_success([
+			'start_date' => $start,
+			'end_date' => $end,
+			'events' => $events,
 		]);
 	}
 
@@ -105,6 +231,9 @@ final class Ajax {
 				'end_date' => $be,
 				'status' => $status,
 				'statusSlug' => self::status_slug($status),
+				'mode' => (string) get_post_meta($bid, '_cie_booking_mode', true),
+				'frequency' => (string) get_post_meta($bid, '_cie_booking_frequency', true),
+				'occurrences' => [],
 				'spaces' => [],
 				'equipment' => [],
 				'user' => null,
@@ -145,6 +274,7 @@ final class Ajax {
 				// User can only see detail link for its own booking (edit flow depends on status).
 				$item['detailUrl'] = null;
 			}
+			$item['occurrences'] = Bookings::get_booking_occurrences($bid, $start, $end);
 
 			$booking_items[] = $item;
 		}
@@ -198,6 +328,21 @@ final class Ajax {
 			Post_Types::BOOKING_STATUS_CANCELLED => 'cancelled',
 		];
 		return $map[$status] ?? 'unknown';
+	}
+
+	/**
+	 * @param array<int|string> $resource_ids
+	 * @return array<int,string>
+	 */
+	private static function resource_names(array $resource_ids): array {
+		$names = [];
+		foreach ($resource_ids as $rid) {
+			$post = get_post((int) $rid);
+			if ($post && $post->post_type === Post_Types::CPT_RESOURCE) {
+				$names[] = (string) $post->post_title;
+			}
+		}
+		return array_values(array_unique($names));
 	}
 }
 
