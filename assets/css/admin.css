@@ -337,3 +337,138 @@
     grid-template-columns: 1fr;
   }
 }
+
+.cie-scheduler {
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+}
+
+.cie-scheduler__toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cie-scheduler__nav,
+.cie-scheduler__views {
+  display: flex;
+  gap: 6px;
+}
+
+.cie-scheduler__nav button,
+.cie-scheduler__views button,
+.cie-scheduler__day,
+.cie-scheduler__time-day {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.cie-scheduler__views button.is-active {
+  background: #2271b1;
+  color: #fff;
+  border-color: #135e96;
+}
+
+.cie-scheduler__week-header {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.cie-scheduler__month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cie-scheduler__day {
+  min-height: 84px;
+  padding: 6px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cie-scheduler__day-number {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cie-scheduler__event-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #dbe3ef;
+  background: #f8fafc;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cie-scheduler__event-chip.is-approved {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #14532d;
+}
+
+.cie-scheduler__event-chip.is-pending {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.cie-scheduler__event-chip.is-block {
+  background: #fff1f2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+.cie-scheduler__time-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.cie-scheduler__time-header,
+.cie-scheduler__time-row {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 76px repeat(7, minmax(0, 1fr));
+}
+
+.cie-scheduler__time-label {
+  font-size: 11px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+}
+
+.cie-scheduler__time-day {
+  padding: 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cie-scheduler__time-cell {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
