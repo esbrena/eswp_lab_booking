@@ -135,6 +135,20 @@ final class Shortcodes {
 		$booking_recurrence_weeks = max(1, min(52, (int) ($_POST['booking_recurrence_weeks'] ?? 1)));
 		$booking_weekdays = array_values(array_filter(array_map('intval', (array) ($_POST['booking_weekdays'] ?? []))));
 		$booking_dates_raw = trim((string) ($_POST['booking_dates_raw'] ?? ''));
+		$installation_type = sanitize_key((string) ($_POST['booking_installation_type'] ?? ''));
+		if (!in_array($installation_type, ['space', 'equipment', 'combined'], true)) {
+			$has_space_posted = !empty($_POST['use_space']);
+			$has_equipment_posted = !empty($_POST['use_equipment']);
+			if ($has_space_posted && $has_equipment_posted) {
+				$installation_type = 'combined';
+			} elseif ($has_space_posted) {
+				$installation_type = 'space';
+			} elseif ($has_equipment_posted) {
+				$installation_type = 'equipment';
+			} else {
+				$installation_type = 'combined';
+			}
+		}
 
 		if ($is_edit_mode && empty($_POST['cie_booking_submit'])) {
 			$booking_mode_meta = sanitize_key((string) get_post_meta($edit_booking_id, '_cie_booking_mode', true));
@@ -167,6 +181,9 @@ final class Shortcodes {
 				$booking_dates_raw = implode(', ', $booking_selected_dates_meta);
 			}
 		}
+
+		$effective_has_space = $installation_type === 'space' || $installation_type === 'combined';
+		$effective_has_equipment = $installation_type === 'equipment' || $installation_type === 'combined';
 
 		ob_start();
 		?>
@@ -250,6 +267,8 @@ final class Shortcodes {
 				<?php if ($edit_booking_id): ?>
 					<input type="hidden" name="booking_id" value="<?php echo esc_attr($edit_booking_id); ?>" />
 				<?php endif; ?>
+				<input type="hidden" name="use_space" value="<?php echo $effective_has_space ? '1' : ''; ?>" data-cie-hidden-use-space="1" />
+				<input type="hidden" name="use_equipment" value="<?php echo $effective_has_equipment ? '1' : ''; ?>" data-cie-hidden-use-equipment="1" />
 
 				<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2">
 					<fieldset class="cie-step-card">
@@ -340,15 +359,24 @@ final class Shortcodes {
 					</fieldset>
 
 					<fieldset class="cie-step-card">
-						<legend><?php echo esc_html__('4) Tipo de instalación', 'cie-lab-booking'); ?></legend>
-						<label class="cie-option">
-							<input type="checkbox" name="use_space" value="1" <?php checked(!empty($_POST['use_space'])); ?> />
-							<?php echo esc_html__('Espacios', 'cie-lab-booking'); ?>
-						</label>
-						<label class="cie-option">
-							<input type="checkbox" name="use_equipment" value="1" <?php checked(!empty($_POST['use_equipment'])); ?> />
-							<?php echo esc_html__('Equipos', 'cie-lab-booking'); ?>
-						</label>
+						<legend><?php echo esc_html__('4) ¿Qué quieres reservar?', 'cie-lab-booking'); ?></legend>
+						<div class="cie-installation-picker">
+							<label class="cie-installation-card" data-cie-installation-card="space">
+								<input type="radio" name="booking_installation_type" value="space" <?php checked($installation_type === 'space'); ?> />
+								<span class="cie-installation-card__title"><?php echo esc_html__('Solo espacio', 'cie-lab-booking'); ?></span>
+								<span class="cie-installation-card__desc"><?php echo esc_html__('Reserva cabina/laboratorio sin equipos.', 'cie-lab-booking'); ?></span>
+							</label>
+							<label class="cie-installation-card" data-cie-installation-card="equipment">
+								<input type="radio" name="booking_installation_type" value="equipment" <?php checked($installation_type === 'equipment'); ?> />
+								<span class="cie-installation-card__title"><?php echo esc_html__('Solo equipo', 'cie-lab-booking'); ?></span>
+								<span class="cie-installation-card__desc"><?php echo esc_html__('Reserva únicamente equipos.', 'cie-lab-booking'); ?></span>
+							</label>
+							<label class="cie-installation-card" data-cie-installation-card="combined">
+								<input type="radio" name="booking_installation_type" value="combined" <?php checked($installation_type === 'combined'); ?> />
+								<span class="cie-installation-card__title"><?php echo esc_html__('Espacio + equipo', 'cie-lab-booking'); ?></span>
+								<span class="cie-installation-card__desc"><?php echo esc_html__('Reserva combinada en una única solicitud.', 'cie-lab-booking'); ?></span>
+							</label>
+						</div>
 					</fieldset>
 
 					<fieldset class="cie-step-card" data-cie-resource-section="spaces">
@@ -385,6 +413,12 @@ final class Shortcodes {
 							</details>
 						<?php endforeach; ?>
 						<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
+					</fieldset>
+
+					<fieldset class="cie-step-card">
+						<legend><?php echo esc_html__('Disponibilidad de los elementos seleccionados', 'cie-lab-booking'); ?></legend>
+						<p class="cie-lab-booking__hint"><?php echo esc_html__('Vista paralela de disponibilidad para los recursos y horario elegidos.', 'cie-lab-booking'); ?></p>
+						<div class="cie-form-availability" data-cie-form-availability="1"></div>
 					</fieldset>
 
 					<fieldset class="cie-step-card">
