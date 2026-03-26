@@ -1,10 +1,3 @@
-.cie-lab-booking {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
-  background: #fff;
-}
-
 .cie-lab-booking--placeholder {
   opacity: 0.75;
 }
@@ -245,8 +238,8 @@
 }
 
 .cie-edit-reservation-info {
-  border-left: 4px solid #cbd5e1;
-  background: #f8fafc;
+  border-left: 4px solid #ffbf00;
+  background: #fff4d4;
   padding: 10px 12px;
   margin: 10px 0 14px;
   display: grid;
@@ -552,7 +545,7 @@
 }
 
 .cie-lab-booking__flow label {
-  width:100%;
+  width:100% !important;
 }
 .cie-lab-booking__flow label input {
   margin-top:8px;
@@ -560,4 +553,516 @@
 .cie-lab-booking__flow label.cie-option input {
   margin-top:0px;
 }
+fieldset.cie-step-card.simple-card {
+    padding: 0px;
+    border: none;
+    margin-top: 32px;
+}
+fieldset.cie-step-card.simple-card legend {
+  font-size: 12px;
+  padding:0px;
+  margin-bottom:16px;
+}
+.cie-inline-fields select {
+  margin-top:8px;
+}
+.cie-booking-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
+  align-items: start;
+}
 
+.cie-booking-layout__calendar h4 {
+  margin: 0 0 8px;
+}
+.cie-booking-layout__calendar button{
+background: white !important;
+border-color:lightgray !important;
+color:black !important;
+}
+
+@media (max-width: 980px) {
+  .cie-booking-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cie-inline-fields {
+      display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 16px;
+    flex-direction: row;
+}
+
+.cie-installation-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.cie-installation-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cie-installation-card input[type='radio'] {
+  margin: 0 0 4px 0;
+  display:none;
+}
+
+.cie-installation-card.is-active {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+}
+
+.cie-installation-card__title {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-installation-card__desc {
+  font-size: 12px;
+  color: #475569;
+}
+
+.cie-inline-fields > label {
+  min-width: 180px;
+}
+
+.cie-weekdays-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cie-slot-availability {
+  margin-top: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.cie-form-availability {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.cie-form-availability__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cie-form-availability__legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.cie-form-availability__legend span {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+
+.cie-form-availability__legend .is-available {
+  background: #ecfdf5;
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.cie-form-availability__legend .is-busy {
+  background: #fff7ed;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+
+.cie-form-availability__legend .is-blocked {
+  background: #fff1f2;
+  border-color: #ef4444;
+  color: #9f1239;
+}
+
+.cie-form-availability__week-header,
+.cie-form-availability__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cie-form-availability__week-header {
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.cie-form-availability__day {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  min-height: 34px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.cie-form-availability__day.is-available {
+  background: #ecfdf5;
+  border-color: #22c55e;
+}
+
+.cie-form-availability__day.is-busy {
+  background: #fff7ed;
+  border-color: #fb923c;
+}
+
+.cie-form-availability__day.is-blocked {
+  background: #fff1f2;
+  border-color: #ef4444;
+}
+
+.cie-form-availability__day.is-muted {
+  opacity: 0.45;
+}
+
+.cie-slot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+label.cie-slot-chip {
+  display: inline-flex;
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  width:auto !important;
+  border: 1px solid transparent;
+}
+
+.cie-slot-chip.is-available {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #22c55e;
+}
+
+.cie-slot-chip.is-unavailable {
+  background: #fff1f2;
+  color: #9f1239;
+  border-color: #fb7185;
+}
+
+.cie-slot-chip.is-selected {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.cie-slot-selector {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cie-slot-selector .cie-slot-chip input {
+  margin: 0 6px 0 0;
+}
+
+.cie-scheduler {
+  border-left: 1px solid #dbe3ef;
+  background: #fff;
+  padding: 16px;
+  min-height:calc(100vh - 85px - 66px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cie-booking-layout__form {
+  padding: 32px;
+}
+
+.cie-booking-layout__form, .cie-booking-layout__calendar {
+  height: calc(100vh - 85px - 66px);
+  overflow: scroll;
+}
+hr {
+  margin: 16px 0px !important;
+  opacity: 0.2 !important;
+}
+.cie-scheduler__nav button {
+    padding: 8px;
+    font-size: 12px;
+    font-weight: bolder;
+}
+
+select {
+    border: 1px solid #dae3ef !important;
+    border-radius: 10px;
+  font-weight: 500;
+}
+
+.cie-scheduler__toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cie-scheduler__nav,
+.cie-scheduler__views {
+  display: flex;
+  gap: 6px;
+}
+
+.cie-scheduler__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cie-scheduler__filters select {
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid #dbe3ef;
+  padding: 4px 8px;
+}
+
+.cie-scheduler__nav button,
+.cie-scheduler__views button,
+.cie-scheduler__time-day,
+.cie-scheduler__day {
+  border: 1px solid #dbe3ef;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+
+.cie-scheduler__views button.is-active {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
+}
+
+.cie-scheduler__title {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-scheduler__week-header {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.cie-scheduler__month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cie-scheduler__day {
+  min-height: 86px;
+  text-align: left;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cie-scheduler__day.is-muted {
+  opacity: 0.55;
+}
+
+.cie-scheduler__day-number {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cie-scheduler__day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cie-scheduler__event-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #dbe3ef;
+  background: #f8fafc;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cie-scheduler__event-chip.is-approved {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #14532d;
+}
+
+.cie-scheduler__event-chip.is-pending {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.cie-scheduler__event-chip.is-changes {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e3a8a;
+}
+
+.cie-scheduler__event-chip.is-rejected,
+.cie-scheduler__event-chip.is-cancelled,
+.cie-scheduler__event-chip.is-block {
+  background: #fff1f2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+.cie-scheduler__event-chip.is-booking.is-resource-combined {
+  background: #ecfdf5;
+  border-color: #16a34a;
+  color: #14532d;
+}
+
+.cie-scheduler__event-chip.is-booking.is-resource-equipment {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+
+.cie-scheduler__event-chip.is-booking.is-resource-space {
+  background: #fff7ed;
+  border-color: #f97316;
+  color: #9a3412;
+}
+
+.cie-scheduler__event-more {
+  font-size: 11px;
+  color: #475569;
+}
+
+.cie-scheduler__time-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.cie-scheduler__time-header,
+.cie-scheduler__all-day-row,
+.cie-scheduler__time-row {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 76px repeat(7, minmax(0, 1fr));
+}
+
+.cie-scheduler__time-label {
+  font-size: 11px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+}
+
+.cie-scheduler__time-day {
+  padding: 6px !important;
+  text-align: center !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.cie-scheduler__time-cell {
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    min-height: 36px;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.cie-day-timeline {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.cie-day-timeline__table {
+  display: grid;
+  gap: 4px;
+}
+
+.cie-day-timeline__row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 8px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+}
+
+.cie-day-timeline__row.is-free {
+  border-color: #22c55e;
+  background: #ecfdf5;
+}
+
+.cie-day-timeline__row.is-busy {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.cie-day-timeline__row.is-blocked {
+  border-color: #ef4444;
+  background: #fff1f2;
+}
+
+.cie-day-timeline__hour {
+  font-weight: 700;
+  color: #334155;
+}
+
+.cie-day-timeline__state {
+  color: #0f172a;
+}
+
+.cie-inline-link {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.day-header {
+  text-align: center;
+}
+
+.weekday {
+  font-size: 0.7em; /* small */
+  font-weight: 600;
+}
+
+.day-number {
+  font-size: 1.4em;
+  font-weight: bold;
+}
