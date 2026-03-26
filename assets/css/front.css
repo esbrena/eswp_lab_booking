@@ -892,6 +892,11 @@ select {
   opacity: 0.55;
 }
 
+.cie-scheduler__day.is-today {
+  outline: 2px solid #0ea5e9;
+  outline-offset: -2px;
+}
+
 .cie-scheduler__day-number {
   font-size: 12px;
   font-weight: 700;
@@ -966,6 +971,17 @@ select {
   color: #475569;
 }
 
+.cie-scheduler__event-more-btn {
+  border: 0;
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .cie-scheduler__time-grid {
   display: grid;
   gap: 4px;
@@ -977,6 +993,11 @@ select {
   display: grid;
   gap: 4px;
   grid-template-columns: 76px repeat(7, minmax(0, 1fr));
+}
+
+.cie-scheduler__time-row.is-current-hour .cie-scheduler__time-cell,
+.cie-scheduler__time-row.is-current-hour .cie-scheduler__time-label {
+  box-shadow: inset 0 -2px 0 #0ea5e9;
 }
 
 .cie-scheduler__time-label {

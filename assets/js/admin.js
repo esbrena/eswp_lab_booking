@@ -47,6 +47,40 @@
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
+  function formatShortWeekdayDate(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return ymd || '';
+    var weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+    weekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    return weekday + ' ' + d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+
+  function uniqueSortedDates(values) {
+    var seen = {};
+    (Array.isArray(values) ? values : []).forEach(function (value) {
+      var ymd = String(value || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) seen[ymd] = ymd;
+    });
+    return Object.keys(seen).sort();
+  }
+
+  function formatCompactDateList(dates) {
+    var normalized = uniqueSortedDates(dates);
+    if (!normalized.length) return '';
+    var parsed = normalized.map(parseYmd).filter(Boolean);
+    if (!parsed.length) return normalized.join(', ');
+    var first = parsed[0];
+    var sameMonthYear = parsed.every(function (date) {
+      return date.getMonth() === first.getMonth() && date.getFullYear() === first.getFullYear();
+    });
+    if (sameMonthYear) {
+      var dayList = parsed.map(function (date) { return date.getDate(); }).join(', ');
+      var monthYear = first.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      return dayList + ' de ' + monthYear;
+    }
+    return normalized.map(formatLongDate).join(', ');
+  }
+
   function timeToMinutes(value) {
     if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return -1;
     var parts = String(value).split(':');
@@ -237,11 +271,65 @@
         return;
       }
       var booking = response.data;
+      var selectedDates = uniqueSortedDates(booking.selected_dates || []);
+      var occurrenceDates = uniqueSortedDates((booking.occurrences || []).map(function (occ) { return occ.date; }));
+      var repeatMode = String(booking.repeat_mode || 'none');
+      var dayScope = String(booking.day_scope || 'single_day');
+      var recurrenceWeeks = parseInt(String(booking.recurrence_weeks || '1'), 10) || 1;
+      var displayDates = selectedDates.length ? selectedDates : occurrenceDates;
+      var dateLabel = '';
+      if (dayScope === 'date_range') {
+        var startLabel = formatLongDate(booking.start_date || '');
+        var endLabel = formatLongDate(booking.end_date || '');
+        dateLabel = startLabel === endLabel ? startLabel : (startLabel + ' - ' + endLabel);
+      } else if (dayScope === 'multiple_days') {
+        dateLabel = formatCompactDateList(displayDates);
+      } else {
+        dateLabel = formatShortWeekdayDate(booking.start_date || '');
+      }
+      var durationLabel = 'Todo el día';
+      if (String(booking.mode || '') === 'time_range') {
+        if (booking.time_start && booking.time_end) {
+          durationLabel = 'De ' + booking.time_start + ' a ' + booking.time_end + ' horas';
+        } else if (Array.isArray(booking.time_slots) && booking.time_slots.length) {
+          var starts = booking.time_slots.map(function (slot) { return String(slot).split('-')[0] || ''; }).filter(Boolean).sort();
+          var ends = booking.time_slots.map(function (slot) { return String(slot).split('-')[1] || ''; }).filter(Boolean).sort();
+          if (starts.length && ends.length) {
+            durationLabel = 'De ' + starts[0] + ' a ' + ends[ends.length - 1] + ' horas';
+          } else {
+            durationLabel = 'Por horas';
+          }
+        } else {
+          durationLabel = 'Por horas';
+        }
+      }
+      var weekdayNames = [];
+      displayDates.forEach(function (ymd) {
+        var parsed = parseYmd(ymd);
+        if (!parsed) return;
+        var wk = parsed.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '').toLowerCase();
+        if (weekdayNames.indexOf(wk) === -1) weekdayNames.push(wk);
+      });
+      var repeatLabel = 'Sin repetición';
+      if (repeatMode === 'daily') {
+        repeatLabel = 'Cada día';
+      } else if (repeatMode === 'weekly') {
+        repeatLabel = weekdayNames.length ? ('Cada semana (' + weekdayNames.join(', ') + ')') : 'Cada semana';
+      } else if (repeatMode === 'biweekly') {
+        repeatLabel = weekdayNames.length ? ('Semana salteada (' + weekdayNames.join(', ') + ')') : 'Semana salteada';
+      }
+      var untilDate = occurrenceDates.length ? occurrenceDates[occurrenceDates.length - 1] : '';
+
       var html = '<h4>' + escapeHtml(booking.title || ('Reserva #' + booking.id)) + '</h4>';
       html += '<p><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></p>';
-      html += '<p><strong>Rango:</strong> ' + escapeHtml(booking.start_date || '') + ' - ' + escapeHtml(booking.end_date || '') + '</p>';
-      if (booking.time_start && booking.time_end) {
-        html += '<p><strong>Horario:</strong> ' + escapeHtml(booking.time_start + ' - ' + booking.time_end) + '</p>';
+      html += '<p><strong>Fecha:</strong> ' + escapeHtml(dateLabel || (booking.start_date || '')) + '</p>';
+      html += '<p><strong>Duración:</strong> ' + escapeHtml(durationLabel) + '</p>';
+      html += '<p><strong>Repetición:</strong> ' + escapeHtml(repeatLabel) + '</p>';
+      if (repeatMode !== 'none') {
+        html += '<p><strong>Número de semanas:</strong> ' + escapeHtml(String(recurrenceWeeks)) + '</p>';
+      }
+      if (untilDate) {
+        html += '<p><strong>Hasta:</strong> ' + escapeHtml(formatLongDate(untilDate)) + '</p>';
       }
       if (Array.isArray(booking.resources) && booking.resources.length) {
         html += '<p><strong>Recursos:</strong> ' + escapeHtml(booking.resources.join(', ')) + '</p>';
@@ -252,14 +340,6 @@
       if (booking.project && booking.project.name) {
         html += '<h5>Proyecto</h5><p><strong>Nombre:</strong> ' + escapeHtml(booking.project.name) + '</p>';
         html += '<p><strong>Responsable:</strong> ' + escapeHtml(booking.project.responsible || '') + '</p>';
-      }
-      if (Array.isArray(booking.occurrences) && booking.occurrences.length) {
-        html += '<h5>Ocurrencias</h5><ul>';
-        booking.occurrences.slice(0, 40).forEach(function (occ) {
-          var line = occ.date + (occ.full_day ? ' (día completo)' : ' (' + occ.start + ' - ' + occ.end + ')');
-          html += '<li>' + escapeHtml(line) + '</li>';
-        });
-        html += '</ul>';
       }
       $modal.find('.cie-modal__content').html(html);
     }).fail(function () {
@@ -303,6 +383,17 @@
           return block.resources.indexOf(resourceFilter) !== -1;
         });
       }
+      bookings.sort(function (a, b) {
+        function firstStart(booking) {
+          var occs = Array.isArray(booking.occurrences) ? booking.occurrences : [];
+          var starts = occs
+            .filter(function (occ) { return occ && occ.date === date; })
+            .map(function (occ) { return occ.full_day ? '00:00' : String(occ.start || '23:59'); })
+            .sort();
+          return starts.length ? starts[0] : '23:59';
+        }
+        return firstStart(a).localeCompare(firstStart(b));
+      });
       var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
       html += renderTimelineSlots(date, bookings, blocks);
       html += '<h5>Reservas del día</h5>';
@@ -328,7 +419,7 @@
           if (block.isGlobal) resources.push('Todos los recursos');
           if (Array.isArray(block.resources)) resources = resources.concat(block.resources);
           html += '<article class="cie-cal-block-card"><div><strong>Mantenimiento</strong></div>';
-          html += '<div class="cie-cal-muted">' + escapeHtml(block.start_date + ' - ' + block.end_date) + '</div>';
+          html += '<div class="cie-cal-muted">' + escapeHtml(formatLongDate(block.start_date)) + ' - ' + escapeHtml(formatLongDate(block.end_date)) + '</div>';
           html += '<div class="cie-cal-muted">' + escapeHtml(resources.join(', ')) + '</div></article>';
         });
         html += '</div>';
@@ -446,17 +537,22 @@
       var first = monthStart(state.current);
       var gridStart = startOfWeek(first);
       var byDate = eventsByDate();
+      var todayYmd = toYmd(new Date());
       var html = '<div class="cie-scheduler__month"><div class="cie-scheduler__week-header"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div><div class="cie-scheduler__month-grid">';
       for (var i = 0; i < 42; i++) {
         var day = addDays(gridStart, i);
         var ymd = toYmd(day);
         var events = byDate[ymd] || [];
         var muted = day.getMonth() === first.getMonth() ? '' : ' is-muted';
-        html += '<div class="cie-scheduler__day' + muted + '" data-cie-open-day="' + ymd + '"><span class="cie-scheduler__day-number">' + day.getDate() + '</span>';
+        var today = ymd === todayYmd ? ' is-today' : '';
+        html += '<div class="cie-scheduler__day' + muted + today + '" data-cie-open-day="' + ymd + '"><span class="cie-scheduler__day-number">' + day.getDate() + '</span><span class="cie-scheduler__day-events">';
         events.slice(0, 2).forEach(function (event) {
           html += renderEventChip(event, false);
         });
-        html += '</div>';
+        if (events.length > 2) {
+          html += '<button type="button" class="cie-scheduler__event-more-btn" data-cie-open-day="' + ymd + '">Ver más…</button>';
+        }
+        html += '</span></div>';
       }
       html += '</div></div>';
       return html;
@@ -467,10 +563,15 @@
       var days = state.view === 'week' ? 7 : 1;
       var rowStyle = ' style="grid-template-columns:76px repeat(' + days + ', minmax(0, 1fr));"';
       var byDate = eventsByDate();
+      var now = new Date();
+      var nowYmd = toYmd(now);
+      var nowMinutes = now.getHours() * 60 + now.getMinutes();
+      var visibleDays = [];
       var html = '<div class="cie-scheduler__time-grid"><div class="cie-scheduler__time-header"' + rowStyle + '><span></span>';
       for (var d = 0; d < days; d++) {
         var day = addDays(start, d);
         var ymd = toYmd(day);
+        visibleDays.push(ymd);
         html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">' + escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
       }
       html += '</div>';
@@ -486,7 +587,8 @@
       for (var hour = 8; hour < 20; hour++) {
         var rowStart = hour * 60;
         var rowEnd = (hour + 1) * 60;
-        html += '<div class="cie-scheduler__time-row"' + rowStyle + '><div class="cie-scheduler__time-label">' + String(hour).padStart(2, '0') + ':00</div>';
+        var currentHourClass = (visibleDays.indexOf(nowYmd) !== -1 && nowMinutes >= rowStart && nowMinutes < rowEnd) ? ' is-current-hour' : '';
+        html += '<div class="cie-scheduler__time-row' + currentHourClass + '"' + rowStyle + '><div class="cie-scheduler__time-label">' + String(hour).padStart(2, '0') + ':00</div>';
         for (var c = 0; c < days; c++) {
           var date = toYmd(addDays(start, c));
           var cellEvents = (byDate[date] || []).filter(function (event) {
@@ -549,6 +651,7 @@
       render();
     });
     $container.on('click', '[data-cie-open-day]', function (event) {
+      if ($(event.target).closest('[data-cie-open-day]')[0] !== this) return;
       if ($(event.target).closest('[data-cie-booking-id]').length) return;
       event.preventDefault();
       var date = String($(this).attr('data-cie-open-day') || '');

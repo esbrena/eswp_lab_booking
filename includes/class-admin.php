@@ -130,6 +130,10 @@ final class Admin {
 			check_admin_referer('cie_lab_booking_save_settings', '_wpnonce_cie_lab_booking_settings');
 
 			$email = trim((string) ($_POST['cie_lab_booking_notification_email'] ?? ''));
+			$max_weeks_raw = (int) ($_POST['cie_lab_booking_max_recurrence_weeks'] ?? Bookings::DEFAULT_MAX_RECURRENCE_WEEKS);
+			$max_range_raw = (int) ($_POST['cie_lab_booking_max_range_days'] ?? Bookings::DEFAULT_MAX_RANGE_DAYS);
+			$max_weeks = max(1, min(52, $max_weeks_raw));
+			$max_range = max(1, min(5, $max_range_raw));
 			if ($email !== '' && !is_email($email)) {
 				Util::admin_notice(__('El correo de notificación no es válido.', 'cie-lab-booking'), 'error');
 			} else {
@@ -138,12 +142,16 @@ final class Admin {
 				} else {
 					update_option(Mailer::OPTION_NOTIFICATION_EMAIL, $email, false);
 				}
+				update_option(Bookings::OPTION_MAX_RECURRENCE_WEEKS, $max_weeks, false);
+				update_option(Bookings::OPTION_MAX_RANGE_DAYS, $max_range, false);
 				Util::admin_notice(__('Ajustes guardados.', 'cie-lab-booking'), 'success');
 			}
 		}
 
 		$current_email = trim((string) get_option(Mailer::OPTION_NOTIFICATION_EMAIL, ''));
 		$default_admin_email = trim((string) get_option('admin_email', ''));
+		$current_max_weeks = Bookings::get_max_recurrence_weeks();
+		$current_max_range_days = Bookings::get_max_range_days();
 
 		echo '<div class="wrap"><h1>' . esc_html__('Ajustes de reservas', 'cie-lab-booking') . '</h1>';
 		echo '<p>' . esc_html__('Configura las notificaciones del sistema de reservas.', 'cie-lab-booking') . '</p>';
@@ -163,6 +171,18 @@ final class Admin {
 			esc_attr($default_admin_email)
 		);
 		echo '</label></p>';
+		echo '<p><label><strong>' . esc_html__('Repetición: número máximo de semanas', 'cie-lab-booking') . '</strong><br/>';
+		printf(
+			'<input type="number" name="cie_lab_booking_max_recurrence_weeks" min="1" max="52" step="1" value="%1$d" />',
+			(int) $current_max_weeks
+		);
+		echo '</label> <small>' . esc_html__('Valor por defecto: 5 semanas.', 'cie-lab-booking') . '</small></p>';
+		echo '<p><label><strong>' . esc_html__('Rango de días máximo permitido', 'cie-lab-booking') . '</strong><br/>';
+		printf(
+			'<input type="number" name="cie_lab_booking_max_range_days" min="1" max="5" step="1" value="%1$d" />',
+			(int) $current_max_range_days
+		);
+		echo '</label> <small>' . esc_html__('Tope funcional: 5 días.', 'cie-lab-booking') . '</small></p>';
 		echo '<p><button class="button button-primary">' . esc_html__('Guardar', 'cie-lab-booking') . '</button></p>';
 		echo '</form>';
 

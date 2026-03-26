@@ -203,6 +203,15 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			// Front users should also see their own pending/changes bookings in the shared calendar.
+			if (!$is_admin && $user_id > 0) {
+				$own = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+				$by_id = [];
+				foreach (array_merge($bookings, $own) as $item) {
+					$by_id[(int) $item->ID] = $item;
+				}
+				$bookings = array_values($by_id);
+			}
 		}
 
 		$events = [];
@@ -319,11 +328,14 @@ final class Ajax {
 			'mode' => (string) get_post_meta($booking_id, '_cie_booking_mode', true),
 			'frequency' => (string) get_post_meta($booking_id, '_cie_booking_frequency', true),
 			'day_scope' => (string) get_post_meta($booking_id, '_cie_booking_day_scope', true),
+			'repeat_mode' => (string) get_post_meta($booking_id, '_cie_booking_repeat_mode', true),
 			'start_date' => (string) get_post_meta($booking_id, '_cie_booking_start_date', true),
 			'end_date' => (string) get_post_meta($booking_id, '_cie_booking_end_date', true),
 			'time_start' => (string) get_post_meta($booking_id, '_cie_booking_time_start', true),
 			'time_end' => (string) get_post_meta($booking_id, '_cie_booking_time_end', true),
 			'time_slots' => array_values(array_filter(array_map('strval', (array) get_post_meta($booking_id, '_cie_booking_time_slots', true)))),
+			'recurrence_weeks' => max(1, (int) get_post_meta($booking_id, '_cie_booking_recurrence_weeks', true)),
+			'selected_dates' => array_values(array_filter(array_map('strval', (array) get_post_meta($booking_id, '_cie_booking_selected_dates', true)))),
 			'spaces' => $space_names,
 			'equipment' => $equipment_names,
 			'resources' => $all_resources,
@@ -369,6 +381,14 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			if (!$is_admin && $user_id > 0) {
+				$own = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+				$by_id = [];
+				foreach (array_merge($bookings, $own) as $item) {
+					$by_id[(int) $item->ID] = $item;
+				}
+				$bookings = array_values($by_id);
+			}
 		}
 		$blocks = Bookings::get_overlapping_blocks($start, $end);
 
