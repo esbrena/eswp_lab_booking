@@ -1,809 +1,1155 @@
 (function ($) {
-  $(function () {
-    var $root = $('.cie-lab-booking');
-    var $flow = $root.find('.cie-lab-booking__flow[data-cie-booking-flow="1"]');
-    var $range = $root.find('input.cie-date-range[name="booking_range"]');
-    var $start = $root.find('input[type="hidden"][name="start_date"]');
-    var $end = $root.find('input[type="hidden"][name="end_date"]');
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
-    function formatDateYmd(dateObj) {
-      if (!dateObj || !(dateObj instanceof Date)) return '';
-      var y = dateObj.getFullYear();
-      var m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      var d = String(dateObj.getDate()).padStart(2, '0');
-      return y + '-' + m + '-' + d;
-    }
-    function formatDateLongEs(dateStr) {
-      if (!dateStr) return '';
+  function parseYmd(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+    var parts = String(value).split('-');
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
 
-      var date = new Date(dateStr + 'T00:00:00');
+  function toYmd(date) {
+    return (
+      date.getFullYear() +
+      '-' +
+      String(date.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(date.getDate()).padStart(2, '0')
+    );
+  }
 
-      return date.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
+  function addDays(date, days) {
+    var copy = new Date(date.getTime());
+    copy.setDate(copy.getDate() + days);
+    return copy;
+  }
+
+  function startOfWeek(date) {
+    var d = new Date(date.getTime());
+    var day = d.getDay();
+    var shift = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + shift);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function monthStart(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+
+  function monthEnd(date) {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  }
+
+  function formatLongDate(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return ymd || '';
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function timeToMinutes(value) {
+    if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return -1;
+    var parts = String(value).split(':');
+    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+  }
+
+  function minutesToHourLabel(minutes) {
+    var h = Math.floor(minutes / 60);
+    return String(h).padStart(2, '0') + ':00';
+  }
+
+  function statusSlug(status) {
+    var map = {
+      pending: 'pending',
+      approved: 'approved',
+      rejected: 'rejected',
+      changes_requested: 'changes',
+      cancelled: 'cancelled',
+      blocked: 'blocked'
+    };
+    return map[status] || status || 'unknown';
+  }
+
+  function statusLabel(status) {
+    var map = {
+      pending: 'Pendiente',
+      approved: 'Validada',
+      rejected: 'Rechazada',
+      changes_requested: 'Cambios solicitados',
+      cancelled: 'Anulada',
+      blocked: 'Mantenimiento'
+    };
+    return map[status] || status || '';
+  }
+
+  function resourceTypeClass(resourceType) {
+    if (resourceType === 'combined') return 'is-resource-combined';
+    if (resourceType === 'space') return 'is-resource-space';
+    if (resourceType === 'equipment') return 'is-resource-equipment';
+    return '';
+  }
+
+  function ensureModal() {
+    var $modal = $('#cie-cal-modal');
+    if ($modal.length) return $modal;
+    $modal = $(
+      '<div id="cie-cal-modal" class="cie-modal" style="display:none">' +
+        '<div class="cie-modal__backdrop" data-cie-close="1"></div>' +
+        '<div class="cie-modal__panel" role="dialog" aria-modal="true">' +
+          '<button type="button" class="cie-modal__close" data-cie-close="1">&times;</button>' +
+          '<div class="cie-modal__content"></div>' +
+        '</div>' +
+      '</div>'
+    );
+    $('body').append($modal);
+    $modal.on('click', '[data-cie-close="1"]', function () {
+      $modal.hide();
+    });
+    $(document).on('keydown', function (event) {
+      if (event.key === 'Escape') $modal.hide();
+    });
+    return $modal;
+  }
+
+  function renderTimelineSlots(date, bookings, blocks) {
+    var hours = [];
+    for (var m = 8 * 60; m < 20 * 60; m += 60) {
+      hours.push({
+        start: m,
+        end: m + 60,
+        blocked: false,
+        bookingIds: []
       });
     }
 
-    var todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    var maxSelectableDate = new Date(todayDate.getTime());
-    maxSelectableDate.setMonth(maxSelectableDate.getMonth() + 3);
-    var todayYmd = formatDateYmd(todayDate);
-    var maxSelectableYmd = formatDateYmd(maxSelectableDate);
-
-    function setupFlatpickr($el, opts) {
-      if (!$el.length || !window.flatpickr) return null;
-      return window.flatpickr($el.get(0), opts);
-    }
-
-    // Flatpickr locale.
-    var fpLocale = (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : null;
-
-    var rangeFp = setupFlatpickr($range, {
-      mode: 'range',
-      dateFormat: 'Y-m-d',
-      locale: fpLocale || 'default',
-      disableMobile: true,
-      altInput: true,
-      altFormat: 'd/m/Y',
-      minDate: todayYmd,
-      maxDate: maxSelectableYmd,
-      onChange: function (selectedDates, dateStr, instance) {
-        var startDate = selectedDates[0] ? instance.formatDate(selectedDates[0], 'Y-m-d') : '';
-        var endDate = selectedDates[1] ? instance.formatDate(selectedDates[1], 'Y-m-d') : '';
-        $start.val(startDate);
-        $end.val(endDate);
-        updateFlow();
-      },
-      showMonths: 3,
+    var isDayBlocked = false;
+    blocks.forEach(function (block) {
+      if (date >= String(block.start_date || '') && date <= String(block.end_date || '')) {
+        isDayBlocked = true;
+      }
     });
 
-    function showNotice(key, message, type) {
-      var $n = $flow.find('[data-cie-notice="' + key + '"]');
-      if (!$n.length) return;
-      if (!message) {
-        $n.hide().removeClass('is-error is-info is-success').text('');
-        return;
-      }
-      $n
-        .removeClass('is-error is-info is-success')
-        .addClass(type === 'error' ? 'is-error' : type === 'success' ? 'is-success' : 'is-info')
-        .text(message)
-        .show();
-    }
-
-    function ymd($input) {
-      var v = ($input.val() || '').toString().trim();
-      return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
-    }
-
-    function isProjectComplete() {
-      var name = ($flow.find('input[name="project_name"]').val() || '').toString().trim();
-      var duration = ($flow.find('input[name="project_duration"]').val() || '').toString().trim();
-      var responsible = ($flow.find('input[name="project_responsible"]').val() || '').toString().trim();
-      var email = ($flow.find('input[name="project_ip_email"]').val() || '').toString().trim();
-      var emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      return !!name && !!duration && !!responsible && emailOk;
-    }
-
-    function toggleStep(step, on) {
-      var $fs = $flow.find('fieldset[data-cie-step="' + step + '"]');
-      if (!$fs.length) return;
-      $fs.toggle(!!on);
-      // Disable inputs when hidden to avoid accidental submission.
-      $fs.find('input,select,textarea,button').prop('disabled', !on);
-    }
-
-    function setSubmitState(enabled) {
-      var $btn = $flow.find('[data-cie-submit]');
-      var $wrap = $flow.find('[data-cie-submit-wrap]');
-      if ($btn.length) $btn.prop('disabled', !enabled);
-      if ($wrap.length) $wrap.toggle(!!enabled);
-    }
-
-    if (rangeFp) {
-      var presetStart = ymd($start);
-      var presetEnd = ymd($end);
-      if (presetStart && presetEnd) {
-        rangeFp.setDate([presetStart, presetEnd], false, 'Y-m-d');
-      } else if (presetStart) {
-        rangeFp.setDate([presetStart], false, 'Y-m-d');
-      }
-    }
-
-    var availabilityCache = {};
-    var availabilityXhr = null;
-    var availabilityTimer = null;
-
-    function requestAvailability(start, end, cb) {
-      var cacheKey = start + '|' + end;
-      if (availabilityCache[cacheKey]) {
-        cb(availabilityCache[cacheKey]);
-        return;
-      }
-      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
-        cb(null);
-        return;
-      }
-
-      if (availabilityXhr && availabilityXhr.abort) availabilityXhr.abort();
-
-      availabilityXhr = $.post(window.CieLabBooking.ajaxUrl, {
-        action: 'cie_lab_booking_availability',
-        nonce: window.CieLabBooking.nonce,
-        start_date: start,
-        end_date: end,
-      })
-        .done(function (res) {
-          if (res && res.success && res.data) {
-            availabilityCache[cacheKey] = res.data;
-            cb(res.data);
-          } else {
-            cb(null);
-          }
-        })
-        .fail(function () {
-          cb(null);
-        });
-    }
-
-    function applyAvailability(data) {
-      if (!data) return { spacesRemoved: 0, equipmentRemoved: 0 };
-      var removedSpaces = 0;
-      var removedEq = 0;
-
-      // Spaces.
-      $flow.find('input[type="checkbox"][name="spaces[]"]').each(function () {
-        var id = parseInt($(this).val(), 10);
-        var ok = data.spaces && data.spaces[id] !== undefined ? !!data.spaces[id] : true;
-        $(this).prop('disabled', !ok);
-        $(this).closest('label').toggleClass('cie-is-disabled', !ok);
-        if (!ok && $(this).prop('checked')) {
-          $(this).prop('checked', false);
-          removedSpaces++;
-        }
-      });
-
-      // Equipment.
-      $flow.find('input[type="checkbox"][name="equipment[]"]').each(function () {
-        var id = parseInt($(this).val(), 10);
-        var ok = data.equipment && data.equipment[id] !== undefined ? !!data.equipment[id] : true;
-        $(this).prop('disabled', !ok);
-        $(this).closest('label').toggleClass('cie-is-disabled', !ok);
-        if (!ok && $(this).prop('checked')) {
-          $(this).prop('checked', false);
-          removedEq++;
-        }
-      });
-
-      return { spacesRemoved: removedSpaces, equipmentRemoved: removedEq };
-    }
-
-    function parseRequires($input) {
-      var raw = ($input.attr('data-cie-requires') || '').toString().trim();
-      if (!raw) return [];
-      try {
-        var parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-          .map(function (x) { return parseInt(String(x), 10); })
-          .filter(function (x) { return !!x; });
-      } catch (err) {
-        return [];
-      }
-    }
-
-    function clearEquipmentDependencyLocks() {
-      $flow.find('input[type="checkbox"][name="equipment[]"]').each(function () {
-        $(this).removeAttr('data-cie-locked');
-        $(this).closest('label').removeClass('cie-option--locked');
-      });
-    }
-
-    function applyEquipmentDependencies() {
-      var $eqInputs = $flow.find('input[type="checkbox"][name="equipment[]"]');
-      var byId = {};
-      var nameById = {};
-      var lockedBySource = {};
-      var invalidSources = {};
-      var infoMessages = [];
-      var errorMessages = [];
-
-      clearEquipmentDependencyLocks();
-
-      $eqInputs.each(function () {
-        var id = parseInt($(this).val(), 10);
-        if (!id) return;
-        byId[id] = $(this);
-        nameById[id] = ($(this).attr('data-cie-equipment-name') || '').toString() || ('Equipo #' + id);
-      });
-
-      var sourceIds = [];
-      $eqInputs.filter(':checked').each(function () {
-        var id = parseInt($(this).val(), 10);
-        if (id) sourceIds.push(id);
-      });
-
-      sourceIds.forEach(function (sourceId) {
-        var stack = [sourceId];
-        var visited = {};
-        while (stack.length) {
-          var currentId = stack.pop();
-          var $current = byId[currentId];
-          if (!$current || !$current.length) continue;
-          var reqIds = parseRequires($current);
-          reqIds.forEach(function (reqId) {
-            if (!reqId || reqId === sourceId) return;
-            if (visited[reqId]) return;
-            visited[reqId] = true;
-
-            var $req = byId[reqId];
-            if (!$req || !$req.length) return;
-            if ($req.prop('disabled')) {
-              invalidSources[sourceId] = invalidSources[sourceId] || [];
-              invalidSources[sourceId].push(reqId);
-              return;
-            }
-
-            if (!$req.prop('checked')) {
-              $req.prop('checked', true);
-            }
-
-            if (!lockedBySource[sourceId]) lockedBySource[sourceId] = {};
-            lockedBySource[sourceId][reqId] = reqId;
-            stack.push(reqId);
+    var bookingNames = {};
+    bookings.forEach(function (booking) {
+      bookingNames[booking.id] = booking.title || ('Reserva #' + booking.id);
+      var occs = Array.isArray(booking.occurrences) ? booking.occurrences : [];
+      occs.forEach(function (occ) {
+        if (occ.date !== date) return;
+        if (occ.full_day) {
+          hours.forEach(function (slot) {
+            if (slot.bookingIds.indexOf(booking.id) === -1) slot.bookingIds.push(booking.id);
           });
+          return;
         }
-      });
-
-      Object.keys(invalidSources).forEach(function (sourceIdRaw) {
-        var sourceId = parseInt(sourceIdRaw, 10);
-        var $source = byId[sourceId];
-        if ($source && $source.length && $source.prop('checked')) {
-          $source.prop('checked', false);
-        }
-        var requiredNames = (invalidSources[sourceId] || [])
-          .map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
-        if (requiredNames.length) {
-          errorMessages.push(
-            'No puedes reservar "' +
-            (nameById[sourceId] || ('Equipo #' + sourceId)) +
-            '" porque requiere: ' +
-            requiredNames.join(', ') +
-            '.'
-          );
-        }
-      });
-
-      Object.keys(lockedBySource).forEach(function (sourceIdRaw) {
-        var sourceId = parseInt(sourceIdRaw, 10);
-        if (invalidSources[sourceId]) return;
-        var reqIds = Object.keys(lockedBySource[sourceId])
-          .map(function (x) { return parseInt(x, 10); })
-          .filter(function (x) { return !!x; });
-        if (!reqIds.length) return;
-
-        reqIds.forEach(function (reqId) {
-          var $req = byId[reqId];
-          if (!$req || !$req.length) return;
-          $req.attr('data-cie-locked', '1');
-          $req.closest('label').addClass('cie-option--locked');
+        var occStart = timeToMinutes(occ.start || '');
+        var occEnd = timeToMinutes(occ.end || '');
+        hours.forEach(function (slot) {
+          var overlap = occStart < slot.end && occEnd > slot.start;
+          if (overlap && slot.bookingIds.indexOf(booking.id) === -1) {
+            slot.bookingIds.push(booking.id);
+          }
         });
-
-        var reqNames = reqIds.map(function (rid) { return nameById[rid] || ('Equipo #' + rid); });
-        infoMessages.push(
-          'Junto con "' +
-          (nameById[sourceId] || ('Equipo #' + sourceId)) +
-          '", también debes reservar: ' +
-          reqNames.join(', ') +
-          '.'
-        );
       });
+    });
 
-      return {
-        infoMessages: infoMessages,
-        errorMessages: errorMessages,
-      };
-    }
-
-    function allDisabled(name) {
-      var $items = $flow.find('input[type="checkbox"][name="' + name + '"]');
-      if (!$items.length) return false;
-      var enabled = $items.filter(function () {
-        return !$(this).prop('disabled');
-      });
-      return enabled.length === 0;
-    }
-
-    function anyChecked(name) {
-      return $flow.find('input[type="checkbox"][name="' + name + '"]:checked').length > 0;
-    }
-
-    function updateFlow() {
-      if (!$flow.length) return;
-
-      var start = ymd($start);
-      var end = ymd($end);
-      var hasCompleteRange = !!start && !!end && end >= start;
-      var inAllowedWindow = hasCompleteRange && start >= todayYmd && end <= maxSelectableYmd;
-      var datesOk = hasCompleteRange && inAllowedWindow;
-
-      var useSpace = $flow.find('input[name="use_space"]').is(':checked');
-      var useEq = $flow.find('input[name="use_equipment"]').is(':checked');
-
-      // Base visibility.
-      toggleStep(3, datesOk && useSpace);
-      toggleStep(4, datesOk && useEq);
-
-      if (!datesOk) {
-        if (!!start && !!end && end < start) {
-          showNotice('dates', 'La fecha final no puede ser anterior a la inicial.', 'error');
-        } else if (!!start && !!end && !inAllowedWindow) {
-          showNotice('dates', 'Solo se permiten fechas desde hoy y dentro de los próximos 3 meses.', 'error');
-        } else {
-          showNotice('dates', '', 'info');
-        }
-        showNotice('spaces', '', 'info');
-        showNotice('equipment', '', 'info');
-        showNotice('equipment-deps', '', 'info');
-        showNotice('courses', '', 'info');
-        clearEquipmentDependencyLocks();
-        toggleStep(5, false);
-        toggleStep(6, false);
-        setSubmitState(false);
-        return;
-      }
-
-      if (!useSpace && !useEq) {
-        showNotice('type', 'Seleccione el tipo de instalación que quiere usar (espacios y/o equipos).', 'info');
-        toggleStep(5, false);
-        toggleStep(6, false);
-        setSubmitState(false);
+    var html = '<div class="cie-day-timeline">';
+    html += '<h5>Huecos y ocupación del día</h5>';
+    html += '<div class="cie-day-timeline__table">';
+    hours.forEach(function (slot) {
+      var isBlocked = isDayBlocked;
+      var hasBooking = slot.bookingIds.length > 0;
+      var stateClass = isBlocked ? 'is-blocked' : hasBooking ? 'is-busy' : 'is-free';
+      html += '<div class="cie-day-timeline__row ' + stateClass + '">';
+      html += '<div class="cie-day-timeline__hour">' + minutesToHourLabel(slot.start) + '</div>';
+      html += '<div class="cie-day-timeline__state">';
+      if (isBlocked) {
+        html += 'Bloqueado por mantenimiento';
+      } else if (hasBooking) {
+        html += slot.bookingIds
+          .map(function (id) {
+            return (
+              '<span class="cie-inline-link" data-cie-booking-id="' +
+              id +
+              '" role="button" tabindex="0">' +
+              escapeHtml(bookingNames[id]) +
+              '</span>'
+            );
+          })
+          .join(', ');
       } else {
-        showNotice('type', '', 'info');
+        html += 'Disponible';
       }
-
-      // Debounced availability refresh.
-      if (availabilityTimer) window.clearTimeout(availabilityTimer);
-      availabilityTimer = window.setTimeout(function () {
-        requestAvailability(start, end, function (data) {
-          var removed = applyAvailability(data);
-          if (data && data.blocked) {
-            showNotice(
-              'dates',
-              'En las fechas seleccionadas hay días no disponibles por mantenimiento. Seleccione otras fechas de reserva.',
-              'error'
-            );
-          } else {
-            showNotice('dates', '', 'info');
-          }
-
-          // Step 3 messaging.
-          if (useSpace) {
-            if (allDisabled('spaces[]')) {
-              showNotice(
-                'spaces',
-                'En las fechas seleccionadas los espacios del laboratorio están reservados. Seleccione otras fechas de reserva.',
-                'error'
-              );
-            } else if (removed.spacesRemoved) {
-              showNotice(
-                'spaces',
-                'En las fechas seleccionadas los espacios del laboratorio están reservados. Seleccione otras fechas de reserva.',
-                'error'
-              );
-            } else {
-              showNotice('spaces', '', 'info');
-            }
-          } else {
-            showNotice('spaces', '', 'info');
-          }
-
-          // Step 4 messaging.
-          if (useEq) {
-            if (allDisabled('equipment[]')) {
-              showNotice(
-                'equipment',
-                'En las fechas seleccionadas los equipos del laboratorio seleccionados están reservados. Seleccione otras fechas de reserva.',
-                'error'
-              );
-            } else if (removed.equipmentRemoved) {
-              showNotice(
-                'equipment',
-                'En las fechas seleccionadas los equipos del laboratorio seleccionados están reservados. Seleccione otras fechas de reserva.',
-                'error'
-              );
-            } else {
-              showNotice('equipment', '', 'info');
-            }
-
-            var dep = applyEquipmentDependencies();
-            if (dep.errorMessages.length) {
-              showNotice('equipment-deps', dep.errorMessages.join(' '), 'error');
-            } else if (dep.infoMessages.length) {
-              showNotice('equipment-deps', dep.infoMessages.join(' '), 'info');
-            } else {
-              showNotice('equipment-deps', '', 'info');
-            }
-          } else {
-            showNotice('equipment', '', 'info');
-            showNotice('equipment-deps', '', 'info');
-            clearEquipmentDependencyLocks();
-          }
-
-          // Step 5 visibility logic.
-          var step3Ok = !useSpace || anyChecked('spaces[]');
-          var step4Ok = !useEq || anyChecked('equipment[]');
-          var isBlocked = !!(data && data.blocked);
-          var canProceed =
-            (useSpace || useEq) &&
-            step3Ok &&
-            step4Ok &&
-            !isBlocked &&
-            !(useSpace && allDisabled('spaces[]')) &&
-            !(useEq && allDisabled('equipment[]'));
-
-          toggleStep(5, canProceed);
-
-          // Courses logic.
-          var courses = $flow.find('input[name="has_courses"]:checked').val() || '';
-          if (!canProceed) {
-            showNotice('courses', '', 'info');
-            toggleStep(6, false);
-            setSubmitState(false);
-            return;
-          }
-
-          if (courses === 'no') {
-            showNotice(
-              'courses',
-              'Antes de usar los equipos, tiene que realizar los cursos de formación. Acceda a su perfil en la intranet y solicite los cursos correspondientes',
-              'error'
-            );
-            toggleStep(6, false);
-            setSubmitState(false);
-            return;
-          }
-
-          if (courses === 'yes') {
-            showNotice('courses', '', 'info');
-            toggleStep(6, true);
-            setSubmitState(isProjectComplete());
-          } else {
-            showNotice('courses', '', 'info');
-            toggleStep(6, false);
-            setSubmitState(false);
-          }
-        });
-      }, 250);
-    }
-
-    // Bind changes.
-    $flow.on('change input', 'input,select,textarea', updateFlow);
-    $flow.on('click', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function (e) {
-      e.preventDefault();
+      html += '</div></div>';
     });
-    $flow.on('change', 'input[type="checkbox"][name="equipment[]"][data-cie-locked="1"]', function () {
-      if (!$(this).prop('checked')) {
-        $(this).prop('checked', true);
+    html += '</div></div>';
+    return html;
+  }
+
+  function openBookingDetails(bookingId) {
+    var id = parseInt(String(bookingId || ''), 10);
+    if (!id) return;
+    var $modal = ensureModal();
+    $modal.find('.cie-modal__content').html('<h4>Detalle de reserva</h4><p>Cargando...</p>');
+    $modal.show();
+
+    if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
+      $modal.find('.cie-modal__content').html('<p>No se pudo cargar el detalle.</p>');
+      return;
+    }
+
+    $.post(window.CieLabBooking.ajaxUrl, {
+      action: 'cie_lab_booking_booking_detail',
+      nonce: window.CieLabBooking.nonce,
+      booking_id: id
+    }).done(function (response) {
+      if (!response || !response.success || !response.data) {
+        $modal.find('.cie-modal__content').html('<p>No se pudo cargar el detalle.</p>');
+        return;
       }
+      var booking = response.data;
+      var html = '<h4>' + escapeHtml(booking.title || ('Reserva #' + booking.id)) + '</h4>';
+      html += '<p><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></p>';
+      html += '<p><strong>Rango:</strong> ' + escapeHtml(booking.start_date || '') + ' - ' + escapeHtml(booking.end_date || '') + '</p>';
+      if (booking.time_start && booking.time_end) {
+        html += '<p><strong>Horario:</strong> ' + escapeHtml(booking.time_start + ' - ' + booking.time_end) + '</p>';
+      }
+      if (Array.isArray(booking.resources) && booking.resources.length) {
+        html += '<p><strong>Recursos:</strong> ' + escapeHtml(booking.resources.join(', ')) + '</p>';
+      }
+      if (booking.project && booking.project.name) {
+        html += '<h5>Proyecto</h5>';
+        html += '<p><strong>Nombre:</strong> ' + escapeHtml(booking.project.name) + '</p>';
+        html += '<p><strong>Responsable:</strong> ' + escapeHtml(booking.project.responsible || '') + '</p>';
+      }
+      if (Array.isArray(booking.occurrences) && booking.occurrences.length) {
+        html += '<h5>Ocurrencias</h5><ul>';
+        booking.occurrences.slice(0, 30).forEach(function (occ) {
+          var line = occ.date + (occ.full_day ? ' (día completo)' : ' (' + occ.start + ' - ' + occ.end + ')');
+          html += '<li>' + escapeHtml(line) + '</li>';
+        });
+        if (booking.occurrences.length > 30) {
+          html += '<li>+' + (booking.occurrences.length - 30) + ' ocurrencias más</li>';
+        }
+        html += '</ul>';
+      }
+      $modal.find('.cie-modal__content').html(html);
+    }).fail(function () {
+      $modal.find('.cie-modal__content').html('<p>No se pudo cargar el detalle.</p>');
     });
+  }
 
-    // Init.
-    // Hide later steps by default until the logic enables them.
-    toggleStep(3, false);
-    toggleStep(4, false);
-    toggleStep(5, false);
-    toggleStep(6, false);
-    setSubmitState(false);
-    updateFlow();
+  function openDayDetails(date, scope, filters) {
+    var $modal = ensureModal();
+    $modal.find('.cie-modal__content').html('<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4><p>Cargando...</p>');
+    $modal.show();
 
-    function buildEditUrl(baseUrl, bookingId) {
-      try {
-        var u = new URL(baseUrl || window.location.href, window.location.href);
-        u.searchParams.set('booking_id', String(bookingId));
-        u.searchParams.set('cie_booking_edit', '1');
-        u.hash = 'cie-booking-form';
-        return u.toString();
-      } catch (err) {
-        var sep = (baseUrl || '').indexOf('?') === -1 ? '?' : '&';
-        return (baseUrl || window.location.href) + sep + 'booking_id=' + encodeURIComponent(String(bookingId)) + '&cie_booking_edit=1#cie-booking-form';
-      }
+    if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
+      $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
+      return;
     }
 
-    // Works even when booking lists are injected later via AJAX.
-    $(document).on('click', '.cie-booking-edit-link', function (e) {
-      var $link = $(this);
-      var bookingId = parseInt(($link.data('bookingId') || '').toString(), 10);
-      if (!bookingId) return;
-      e.preventDefault();
-      var baseUrl = ($link.data('formUrl') || $link.attr('href') || window.location.href).toString();
-      window.location.assign(buildEditUrl(baseUrl, bookingId));
-    });
-
-    // Calendar hover/click details (front + admin calendar shortcode rendered on front).
-    var tooltip = null;
-    var detailCache = {};
-    var detailInflight = {};
-    var activeTooltipKey = '';
-    var activeModalKey = '';
-
-    function ensureTooltip() {
-      if (tooltip) return tooltip;
-      tooltip = $('<div class="cie-cal-tooltip" />').hide();
-      $('body').append(tooltip);
-      return tooltip;
-    }
-
-    function statusLabel(status) {
-      var map = {
-        pending: 'Pendiente de validar',
-        approved: 'Validada',
-        rejected: 'No validada',
-        changes_requested: 'Cambios solicitados',
-        cancelled: 'Anulada',
-      };
-      return map[status] || status || '';
-    }
-
-    function statusSlug(status) {
-      var map = {
-        pending: 'pending',
-        approved: 'approved',
-        rejected: 'rejected',
-        changes_requested: 'changes',
-        cancelled: 'cancelled',
-      };
-      return map[status] || 'unknown';
-    }
-
-    function fetchDayDetails(date, calendarScope, cb) {
-      var scope = calendarScope || 'general';
-      var cacheKey = date + '|' + scope;
-
-      if (detailCache[cacheKey]) {
-        cb('success', detailCache[cacheKey]);
-        return;
-      }
-      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
-        cb('error', null);
-        return;
-      }
-      if (detailInflight[cacheKey]) {
-        detailInflight[cacheKey].push(cb);
+    $.post(window.CieLabBooking.ajaxUrl, {
+      action: 'cie_lab_booking_day_details',
+      nonce: window.CieLabBooking.nonce,
+      date: date,
+      calendar_scope: scope || 'general'
+    }).done(function (response) {
+      if (!response || !response.success || !response.data) {
+        $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
         return;
       }
 
-      detailInflight[cacheKey] = [cb];
-      $.post(window.CieLabBooking.ajaxUrl, {
-        action: 'cie_lab_booking_day_details',
-        nonce: window.CieLabBooking.nonce,
-        date: date,
-        calendar_scope: scope,
-      })
-        .done(function (res) {
-          var callbacks = detailInflight[cacheKey] || [];
-          delete detailInflight[cacheKey];
-          if (res && res.success && res.data) {
-            detailCache[cacheKey] = res.data;
-            callbacks.forEach(function (fn) { fn('success', res.data); });
-          } else {
-            callbacks.forEach(function (fn) { fn('error', null); });
-          }
-        })
-        .fail(function () {
-          var callbacks = detailInflight[cacheKey] || [];
-          delete detailInflight[cacheKey];
-          callbacks.forEach(function (fn) { fn('error', null); });
+      var data = response.data;
+      var bookings = Array.isArray(data.bookings) ? data.bookings : [];
+      var blocks = Array.isArray(data.blocks) ? data.blocks : [];
+      var resourceFilter = (filters && filters.resourceName) ? String(filters.resourceName) : 'all';
+      var typeFilter = (filters && filters.resourceType) ? String(filters.resourceType) : 'all';
+      if (typeFilter !== 'all') {
+        bookings = bookings.filter(function (booking) {
+          return String(booking.resourceType || 'space') === typeFilter;
         });
-    }
-
-    function renderTooltipLoading(date) {
-      var $t = ensureTooltip();
-      $t.html('<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div><div class="cie-cal-tooltip__line">Cargando detalle...</div>');
-    }
-
-    function renderTooltipError(date) {
-      var $t = ensureTooltip();
-      $t.html('<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div><div class="cie-cal-tooltip__line">No se pudo mostrar el detalle.</div>');
-    }
-
-    function renderTooltipData(date, data) {
-      var $t = ensureTooltip();
-      var bookings = data.bookings || [];
-      var blocks = data.blocks || [];
-      var html = '<div class="cie-cal-tooltip__date"><strong>' + date + '</strong></div>';
-      if (!bookings.length && !blocks.length) {
-        html += '<div class="cie-cal-tooltip__line">Sin reservas ni bloqueos</div>';
-        $t.html(html);
-        return;
       }
-
-      if (blocks.length) {
-        var blockResources = [];
-        blocks.forEach(function (b) {
-          if (b.isGlobal) blockResources.push('Global');
-          if (b.resources && b.resources.length) blockResources = blockResources.concat(b.resources);
+      if (resourceFilter !== 'all') {
+        bookings = bookings.filter(function (booking) {
+          var resources = [];
+          if (Array.isArray(booking.spaces)) resources = resources.concat(booking.spaces);
+          if (Array.isArray(booking.equipment)) resources = resources.concat(booking.equipment);
+          return resources.indexOf(resourceFilter) !== -1;
         });
-        html += '<div class="cie-cal-tooltip__line"><strong>Mantenimiento</strong>: ' + (blockResources.length ? blockResources.slice(0, 3).join(', ') : blocks.length) + (blockResources.length > 3 ? '…' : '') + '</div>';
-      }
-      if (bookings.length) {
-        var res = [];
-        bookings.forEach(function (b) {
-          if (b.spaces && b.spaces.length) res = res.concat(b.spaces);
-          if (b.equipment && b.equipment.length) res = res.concat(b.equipment);
+        blocks = blocks.filter(function (block) {
+          if (block.isGlobal) return true;
+          if (!Array.isArray(block.resources)) return false;
+          return block.resources.indexOf(resourceFilter) !== -1;
         });
-        var uniq = {};
-        res = res.filter(function (x) {
-          if (!x) return false;
-          if (uniq[x]) return false;
-          uniq[x] = true;
-          return true;
-        });
-        html += '<div class="cie-cal-tooltip__line"><strong>Reservado</strong>: ' + (res.length ? res.slice(0, 3).join(', ') : bookings.length) + (res.length > 3 ? '…' : '') + '</div>';
       }
-      $t.html(html);
-    }
-
-    function ensureModal() {
-      var $m = $('#cie-cal-modal');
-      if ($m.length) return $m;
-      $m = $(
-        '<div id="cie-cal-modal" class="cie-modal" style="display:none">' +
-          '<div class="cie-modal__backdrop" data-cie-close></div>' +
-          '<div class="cie-modal__panel" role="dialog" aria-modal="true">' +
-            '<button type="button" class="cie-modal__close" data-cie-close>&times;</button>' +
-            '<div class="cie-modal__content"></div>' +
-          '</div>' +
-        '</div>'
-      );
-      $('body').append($m);
-      $m.on('click', '[data-cie-close]', function () {
-        $m.hide();
-      });
-      $(document).on('keydown', function (e) {
-        if (e.key === 'Escape') $m.hide();
-      });
-      return $m;
-    }
-
-    function renderBookingCard(b) {
-      var resources = [];
-      if (b.spaces && b.spaces.length) resources = resources.concat(b.spaces);
-      if (b.equipment && b.equipment.length) resources = resources.concat(b.equipment);
-      var primaryResource = resources.length ? resources[0] : 'Reserva';
-      var bookingDates = formatDateLongEs(b.start_date) + ' - ' + formatDateLongEs(b.end_date); //(b.start_date || '') + ' - ' + (b.end_date || '');
-      var badges = '';
-      if (b.spaces && b.spaces.length) {
-        badges += '<span class="cie-resource-badge cie-resource-badge--space"><span class="badge-circle"></span>Espacio</span>';
-      }
-      if (b.equipment && b.equipment.length) {
-        badges += '<span class="cie-resource-badge cie-resource-badge--equipment"><span class="badge-circle"></span>Equipo</span>';
-      }
-      if (b.status) {
-        badges +=
-          '<span class="cie-status-tag cie-status-tag--' +
-          statusSlug(b.status) +
-          '">' +
-          statusLabel(b.status) +
-          '</span>';
-      }
-
-      return (
-        '<article class="cie-cal-booking-card">' +
-          (badges ? '<div class="cie-cal-booking-card__badges">' + badges + '</div>' : '') +
-          '<div class="cie-cal-booking-card__resource">' + primaryResource + '</div>' +
-          '<div class="cie-cal-booking-card__meta">ID #' + (b.id || '') + ' · ' + bookingDates + '</div>' +
-          (resources.length > 1 ? '<div class="cie-cal-booking-card__extra">' + resources.slice(1).join(', ') + '</div>' : '') +
-          (b.detailUrl ? '<div class="cie-cal-booking-card__actions"><a href="' + b.detailUrl + '">Ver detalle</a></div>' : '') +
-        '</article>'
-      );
-    }
-
-    function openModalLoading(date) {
-      var $m = ensureModal();
-      $m.find('.cie-modal__content').html('<h4>Detalle de ' + formatDateLongEs(date) + '</h4><p>Cargando detalle...</p>');
-      $m.show();
-    }
-
-    function openModalError(date) {
-      var $m = ensureModal();
-      $m.find('.cie-modal__content').html('<small>Detalle de</small><h4>' + formatDateLongEs(date) + '</h4><p>No se pudo cargar el detalle.</p>');
-      $m.show();
-    }
-
-    function openModalData(date, data) {
-      var $m = ensureModal();
-      var $c = $m.find('.cie-modal__content');
-      var bookings = data.bookings || [];
-      var blocks = data.blocks || [];
-
-      var html = '<small>Detalle de</small><h4>' + formatDateLongEs(date) + '</h4>';
-      if (!bookings.length && !blocks.length) {
-        html += '<p><em>No hay reservas ni bloqueos para este día.</em></p>';
-        $c.html(html);
-        $m.show();
-        return;
-      }
+      var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
+      html += renderTimelineSlots(date, bookings, blocks);
 
       if (blocks.length) {
         html += '<h5>Mantenimiento</h5><div class="cie-cal-block-list">';
-        blocks.forEach(function (b) {
-          var r = [];
-          if (b.isGlobal) r.push('Global');
-          if (b.resources && b.resources.length) r = r.concat(b.resources);
-          html +=
-            '<article class="cie-cal-block-card">' +
-              '<div><strong>Mantenimiento</strong></div>' +
-              '<div class="cie-cal-muted">' +  formatDateLongEs(b.start_date) + ' - ' + formatDateLongEs(b.end_date)  + '</div>' +
-              (r.length ? '<div class="cie-cal-block-card__resources">' + r.join(', ') + '</div>' : '') +
-            '</article>';
+        blocks.forEach(function (block) {
+          var resources = [];
+          if (block.isGlobal) resources.push('Todos los recursos');
+          if (Array.isArray(block.resources)) resources = resources.concat(block.resources);
+          html += '<article class="cie-cal-block-card">';
+          html += '<div><strong>Mantenimiento</strong></div>';
+          html += '<div class="cie-cal-muted">' + escapeHtml(formatLongDate(block.start_date)) + ' - ' + escapeHtml(formatLongDate(block.end_date)) + '</div>';
+          if (resources.length) {
+            html += '<div class="cie-cal-muted">' + escapeHtml(resources.join(', ')) + '</div>';
+          }
+          html += '</article>';
         });
         html += '</div>';
       }
 
-      html += '<h5>Reservas</h5>';
+      html += '<h5>Reservas del día</h5>';
       if (!bookings.length) {
         html += '<p><em>No hay reservas.</em></p>';
       } else {
         html += '<div class="cie-cal-booking-list">';
-        bookings.forEach(function (b) {
-          html += renderBookingCard(b);
+        bookings.forEach(function (booking) {
+          var resources = [];
+          if (Array.isArray(booking.spaces)) resources = resources.concat(booking.spaces);
+          if (Array.isArray(booking.equipment)) resources = resources.concat(booking.equipment);
+          html += '<article class="cie-cal-booking-card">';
+          html += '<div class="cie-cal-booking-card__badges"><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></div>';
+          html += '<div class="cie-cal-booking-card__resource">' + escapeHtml(booking.title || resources[0] || ('Reserva #' + booking.id)) + '</div>';
+          html += '<div class="cie-cal-muted">' + escapeHtml(resources.join(', ')) + '</div>';
+          html += '<div class="cie-cal-booking-card__actions"><a href="#" data-cie-booking-id="' + booking.id + '">Ver detalle</a></div>';
+          html += '</article>';
         });
         html += '</div>';
       }
-      $c.html(html);
-      $m.show();
+      $modal.find('.cie-modal__content').html(html);
+    }).fail(function () {
+      $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
+    });
+  }
+
+  function initBookingForm($flow) {
+    if (!$flow.length) return;
+    var locale = (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : 'default';
+
+    $flow.find('input.cie-date').each(function () {
+      if (!window.flatpickr) return;
+      window.flatpickr(this, {
+        dateFormat: 'Y-m-d',
+        locale: locale,
+        disableMobile: true,
+        altInput: true,
+        altFormat: 'd/m/Y',
+        allowInput: true
+      });
+    });
+
+    $flow.find('input.cie-date-multiple').each(function () {
+      if (!window.flatpickr) return;
+      window.flatpickr(this, {
+        mode: 'multiple',
+        conjunction: ', ',
+        dateFormat: 'Y-m-d',
+        locale: locale,
+        disableMobile: true,
+        altInput: true,
+        altFormat: 'd/m/Y'
+      });
+    });
+
+    var formAvailabilityState = {
+      currentMonth: monthStart(new Date()),
+      cache: {}
+    };
+
+    function selectedMode() {
+      return String($flow.find('[name="booking_mode"]').val() || 'full_day');
     }
 
-    // Use document-level delegation to work with any page builder DOM injection.
-    $(document).on('mouseenter', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function (e) {
-      var date = $(this).data('cie-date');
-      if (!date) return;
-      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
-      var key = date + '|' + scope;
-      activeTooltipKey = key;
-      var $t = ensureTooltip();
-      renderTooltipLoading(date);
-      $t.show();
-      $t.css({ left: e.pageX + 12, top: e.pageY + 12, position: 'absolute' });
+    function selectedFrequency() {
+      return String($flow.find('[name="booking_frequency"]').val() || 'single');
+    }
 
-      fetchDayDetails(date, scope, function (status, data) {
-        if (activeTooltipKey !== key) return;
-        if (status === 'success' && data) {
-          renderTooltipData(date, data);
-        } else {
-          renderTooltipError(date);
-        }
+    function selectedDayScope() {
+      return String($flow.find('input[name="booking_day_scope"]:checked').val() || 'single_day');
+    }
+
+    function selectedInstallationType() {
+      return String($flow.find('input[name="booking_installation_type"]:checked').val() || 'combined');
+    }
+
+    function selectedPrimaryDate() {
+      var frequency = selectedFrequency();
+      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
+      if (frequency === 'manual_dates') {
+        var raw = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
+        if (!raw) return '';
+        return raw.split(/[,\s;]+/).filter(Boolean)[0] || '';
+      }
+      return start;
+    }
+
+    function selectedTimeSlots() {
+      var slots = [];
+      $flow.find('input[name="booking_time_slots[]"]:checked').each(function () {
+        slots.push(String($(this).val() || '').trim());
       });
-    });
+      return slots.filter(Boolean);
+    }
 
-    $(document).on('mousemove', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function (e) {
-      if (!tooltip || !tooltip.is(':visible')) return;
-      tooltip.css({ left: e.pageX + 12, top: e.pageY + 12 });
-    });
-
-    $(document).on('mouseleave', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
-      activeTooltipKey = '';
-      if (tooltip) tooltip.hide();
-    });
-
-    $(document).on('click', '.cie-lab-booking .cie-calendar-day[data-cie-date]', function () {
-      var date = $(this).data('cie-date');
-      if (!date) return;
-      var scope = ($(this).closest('[data-cie-calendar-scope]').data('cie-calendar-scope') || 'general').toString();
-      var key = date + '|' + scope;
-      activeModalKey = key;
-      openModalLoading(date);
-      fetchDayDetails(date, scope, function (status, data) {
-        if (activeModalKey !== key) return;
-        if (status === 'success' && data) {
-          openModalData(date, data);
-        } else {
-          openModalError(date);
-        }
+    function selectedResources() {
+      var spaces = [];
+      var equipment = [];
+      $flow.find('input[name="spaces[]"]:checked').each(function () {
+        spaces.push(parseInt(String($(this).val()), 10));
       });
+      $flow.find('input[name="equipment[]"]:checked').each(function () {
+        equipment.push(parseInt(String($(this).val()), 10));
+      });
+      return {
+        spaces: spaces.filter(Boolean),
+        equipment: equipment.filter(Boolean)
+      };
+    }
+
+    function selectedResourceNames() {
+      var names = [];
+      $flow.find('input[name="spaces[]"]:checked,input[name="equipment[]"]:checked').each(function () {
+        var text = String($(this).attr('data-cie-equipment-name') || $(this).attr('data-cie-space-name') || '').trim();
+        if (!text) {
+          text = String($(this).closest('label').clone().children().remove().end().text() || '').replace(/\s+/g, ' ').trim();
+        }
+        if (text) names.push(text);
+      });
+      return names;
+    }
+
+    function parseRequires($input) {
+      var raw = String($input.attr('data-cie-requires') || '').trim();
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map(function (id) { return parseInt(String(id), 10); }).filter(Boolean);
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function applyEquipmentDependencies() {
+      var byId = {};
+      var names = {};
+      var messages = [];
+      $flow.find('input[name="equipment[]"]').each(function () {
+        var id = parseInt(String($(this).val()), 10);
+        if (!id) return;
+        byId[id] = $(this);
+        names[id] = String($(this).attr('data-cie-equipment-name') || ('Equipo #' + id));
+        $(this).removeAttr('data-cie-locked');
+        $(this).closest('.cie-option').removeClass('cie-option--locked');
+      });
+
+      $flow.find('input[name="equipment[]"]:checked').each(function () {
+        var sourceId = parseInt(String($(this).val()), 10);
+        parseRequires($(this)).forEach(function (reqId) {
+          var $required = byId[reqId];
+          if (!$required || !$required.length || $required.prop('disabled')) return;
+          $required.prop('checked', true);
+          $required.attr('data-cie-locked', '1');
+          $required.closest('.cie-option').addClass('cie-option--locked');
+          messages.push('"' + names[sourceId] + '" requiere "' + names[reqId] + '".');
+        });
+      });
+
+      var $notice = $flow.find('[data-cie-notice="equipment-deps"]');
+      if (messages.length) {
+        $notice.text(messages.join(' ')).show().addClass('is-info');
+      } else {
+        $notice.hide().text('').removeClass('is-info');
+      }
+    }
+
+    function syncInstallationHiddenInputs() {
+      var type = selectedInstallationType();
+      var useSpace = type === 'space' || type === 'combined';
+      var useEquipment = type === 'equipment' || type === 'combined';
+      var $form = $flow.closest('form');
+      $form.find('[data-cie-hidden-use-space="1"]').val(useSpace ? '1' : '');
+      $form.find('[data-cie-hidden-use-equipment="1"]').val(useEquipment ? '1' : '');
+
+      $flow.find('.cie-installation-card').removeClass('is-active');
+      $flow.find('.cie-installation-card[data-cie-installation-card="' + type + '"]').addClass('is-active');
+      return { useSpace: useSpace, useEquipment: useEquipment };
+    }
+
+    function syncLinkedScheduler() {
+      var $scheduler = $flow.closest('form').find('.cie-scheduler[data-cie-form-linked-scheduler="1"]').first();
+      if (!$scheduler.length) return;
+      var api = $scheduler.data('cieSchedulerApi');
+      if (!api) return;
+      var installType = selectedInstallationType();
+      var resourceType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
+      var names = selectedResourceNames();
+      api.setFilters({
+        resourceType: names.length ? resourceType : 'all',
+        resourceNames: names
+      });
+      var startDate = String($flow.find('input[name="start_date"]').val() || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        api.setFocusDate(startDate);
+      }
+    }
+
+    function updateScheduleNotice() {
+      var mode = selectedMode();
+      var frequency = selectedFrequency();
+      var dayScope = selectedDayScope();
+      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
+      var end = String($flow.find('input[name="end_date"]').val() || '').trim();
+      var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
+      var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
+      var slots = selectedTimeSlots();
+      var summary = '';
+
+      if (frequency === 'single') {
+        if (mode === 'full_day') {
+          summary = dayScope === 'date_range' && end
+            ? 'Reserva de día completo del ' + formatLongDate(start) + ' al ' + formatLongDate(end) + '.'
+            : 'Reserva de día completo para ' + formatLongDate(start) + '.';
+        } else {
+          summary = 'Reserva por horas para ' + formatLongDate(start) + ' (' + (slots.length || 0) + ' bloques seleccionados).';
+        }
+      } else if (frequency === 'weekly_repeat') {
+        summary =
+          (mode === 'full_day' ? 'Reserva semanal de día completo' : 'Reserva semanal por horas') +
+          ' durante ' +
+          (weeks || 1) +
+          ' semanas.';
+      } else {
+        summary =
+          (mode === 'full_day' ? 'Reserva de días sueltos' : 'Reserva por horas en días sueltos') +
+          (manual ? ' (' + manual + ').' : '.');
+      }
+      $flow.find('[data-cie-notice="schedule"]').text(summary).show();
+    }
+
+    var slotsXhr = null;
+    function updateSlotsAvailability() {
+      var mode = selectedMode();
+      var resources = selectedResources();
+      var date = selectedPrimaryDate();
+      var $box = $flow.find('[data-cie-slot-availability]');
+      var $selector = $flow.find('[data-cie-slot-selector]');
+      if (mode !== 'time_range' || !date || (!resources.spaces.length && !resources.equipment.length)) {
+        $box.hide().empty();
+        $selector.hide();
+        return;
+      }
+      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) return;
+      if (slotsXhr && slotsXhr.abort) slotsXhr.abort();
+
+      $box.html('<div class="cie-cal-muted">Comprobando disponibilidad horaria...</div>').show();
+      slotsXhr = $.post(window.CieLabBooking.ajaxUrl, {
+        action: 'cie_lab_booking_time_slots',
+        nonce: window.CieLabBooking.nonce,
+        date: date,
+        spaces: resources.spaces,
+        equipment: resources.equipment
+      }).done(function (response) {
+        if (!response || !response.success || !response.data || !Array.isArray(response.data.slots)) {
+          $box.html('<div class="cie-cal-muted">No se pudo obtener disponibilidad horaria.</div>').show();
+          return;
+        }
+        var selected = {};
+        selectedTimeSlots().forEach(function (slot) {
+          selected[slot] = true;
+        });
+        var html = '<strong>Bloques para ' + escapeHtml(formatLongDate(date)) + '</strong><div class="cie-slot-grid">';
+        var selectorHtml = '';
+        response.data.slots.forEach(function (slot) {
+          var slotKey = String(slot.start + '-' + slot.end);
+          var selectedAttr = slot.available && selected[slotKey] ? ' checked' : '';
+          var disabledAttr = slot.available ? '' : ' disabled';
+          var selectedClass = slot.available && selected[slotKey] ? ' is-selected' : '';
+          html += '<span class="cie-slot-chip ' + (slot.available ? 'is-available' : 'is-unavailable') + selectedClass + '">' + escapeHtml(slot.start + ' - ' + slot.end) + '</span>';
+          selectorHtml += '<label class="cie-slot-chip ' + (slot.available ? 'is-available' : 'is-unavailable') + selectedClass + '">';
+          selectorHtml += '<input type="checkbox" name="booking_time_slots[]" value="' + escapeHtml(slotKey) + '"' + selectedAttr + disabledAttr + ' />';
+          selectorHtml += escapeHtml(slot.start + ' - ' + slot.end) + '</label>';
+        });
+        html += '</div>';
+        $box.html(html).show();
+        $selector.html(selectorHtml).show();
+        updateScheduleNotice();
+        updateContinueState();
+        updateFormAvailability();
+      }).fail(function () {
+        $box.html('<div class="cie-cal-muted">No se pudo obtener disponibilidad horaria.</div>').show();
+        $selector.hide();
+      });
+    }
+
+    function renderFormAvailability(daysMap) {
+      var $container = $flow.find('[data-cie-form-availability="1"]');
+      if (!$container.length) return;
+      var first = monthStart(formAvailabilityState.currentMonth);
+      var last = monthEnd(first);
+      var gridStart = startOfWeek(first);
+      var monthLabel = first.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      var html = '<div class="cie-form-availability__toolbar">';
+      html += '<button type="button" class="cie-btn" data-cie-form-av-nav="-1">&larr;</button>';
+      html += '<strong>' + escapeHtml(monthLabel) + '</strong>';
+      html += '<button type="button" class="cie-btn" data-cie-form-av-nav="1">&rarr;</button>';
+      html += '</div>';
+      html += '<div class="cie-form-availability__legend">';
+      html += '<span class="is-available">Disponible</span><span class="is-busy">Ocupado</span><span class="is-blocked">Bloqueado</span>';
+      html += '</div>';
+      html += '<div class="cie-form-availability__week-header"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>';
+      html += '<div class="cie-form-availability__grid">';
+      for (var i = 0; i < 42; i++) {
+        var day = addDays(gridStart, i);
+        var ymd = toYmd(day);
+        var state = daysMap[ymd] ? String(daysMap[ymd].status || 'available') : 'available';
+        var classes = 'cie-form-availability__day is-' + state + (day.getMonth() === first.getMonth() ? '' : ' is-muted');
+        html += '<button type="button" class="' + classes + '" data-cie-form-day="' + ymd + '">' + day.getDate() + '</button>';
+      }
+      html += '</div>';
+      html += '<small>Click en un día para ver sus huecos y reservas.</small>';
+      $container.html(html);
+    }
+
+    var formAvailabilityXhr = null;
+    function updateFormAvailability() {
+      var resources = selectedResources();
+      var mode = selectedMode();
+      var timeStart = String($flow.find('input[name="booking_time_start"]').val() || '').trim();
+      var timeEnd = String($flow.find('input[name="booking_time_end"]').val() || '').trim();
+      var timeSlots = selectedTimeSlots();
+      var $container = $flow.find('[data-cie-form-availability="1"]');
+      if (!resources.spaces.length && !resources.equipment.length) {
+        $container.html('<p class="cie-cal-muted">Seleccione al menos un espacio o equipo para ver disponibilidad.</p>');
+        return;
+      }
+      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) return;
+      var first = monthStart(formAvailabilityState.currentMonth);
+      var last = monthEnd(first);
+      var cacheKey = [
+        toYmd(first),
+        toYmd(last),
+        mode,
+        timeStart,
+        timeEnd,
+        timeSlots.join('-'),
+        resources.spaces.join('-'),
+        resources.equipment.join('-')
+      ].join('|');
+      if (formAvailabilityState.cache[cacheKey]) {
+        renderFormAvailability(formAvailabilityState.cache[cacheKey]);
+        return;
+      }
+      if (formAvailabilityXhr && formAvailabilityXhr.abort) formAvailabilityXhr.abort();
+      $container.html('<p class="cie-cal-muted">Cargando disponibilidad...</p>');
+      formAvailabilityXhr = $.post(window.CieLabBooking.ajaxUrl, {
+        action: 'cie_lab_booking_resource_availability_calendar',
+        nonce: window.CieLabBooking.nonce,
+        start_date: toYmd(first),
+        end_date: toYmd(last),
+        spaces: resources.spaces,
+        equipment: resources.equipment,
+        booking_mode: mode,
+        booking_time_start: timeStart,
+        booking_time_end: timeEnd,
+        booking_time_slots: timeSlots
+      }).done(function (response) {
+        if (!response || !response.success || !response.data || !response.data.days) {
+          $container.html('<p class="cie-cal-muted">No se pudo cargar la disponibilidad.</p>');
+          return;
+        }
+        formAvailabilityState.cache[cacheKey] = response.data.days;
+        renderFormAvailability(response.data.days);
+      }).fail(function () {
+        $container.html('<p class="cie-cal-muted">No se pudo cargar la disponibilidad.</p>');
+      });
+    }
+
+    function canContinue() {
+      var install = syncInstallationHiddenInputs();
+      var resources = selectedResources();
+      var mode = selectedMode();
+      var frequency = selectedFrequency();
+      var dayScope = selectedDayScope();
+      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
+      var end = String($flow.find('input[name="end_date"]').val() || '').trim();
+      var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
+      var hasResources = (!install.useSpace || resources.spaces.length > 0) && (!install.useEquipment || resources.equipment.length > 0);
+      if (!hasResources) return false;
+      if (frequency === 'manual_dates') {
+        if (!manual) return false;
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+        return false;
+      }
+      if (frequency === 'single' && dayScope === 'date_range' && !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return false;
+      }
+      if (mode === 'time_range' && !selectedTimeSlots().length) {
+        return false;
+      }
+      return true;
+    }
+
+    function updateContinueState() {
+      var $continue = $flow.find('[data-cie-continue]');
+      var allow = canContinue();
+      $continue.toggle(allow);
+      $continue.prop('disabled', !allow);
+    }
+
+    function setDetailsVisible(show) {
+      $flow.find('[data-cie-phase="details"]').toggle(show);
+    }
+
+    function updateVisibility() {
+      var mode = selectedMode();
+      var frequency = selectedFrequency();
+      var dayScope = selectedDayScope();
+      var install = syncInstallationHiddenInputs();
+
+      $flow.find('[data-cie-only-mode]').each(function () {
+        $(this).toggle(String($(this).attr('data-cie-only-mode')) === mode);
+      });
+      $flow.find('[data-cie-only-frequency]').each(function () {
+        $(this).toggle(String($(this).attr('data-cie-only-frequency')) === frequency);
+      });
+      $flow.find('[data-cie-only-day-scope]').each(function () {
+        $(this).toggle(String($(this).attr('data-cie-only-day-scope')) === dayScope);
+      });
+
+      $flow.find('[data-cie-resource-section="spaces"]').toggle(install.useSpace);
+      $flow.find('[data-cie-resource-section="equipment"]').toggle(install.useEquipment);
+
+      if (!install.useSpace) {
+        $flow.find('input[name="spaces[]"]').prop('checked', false);
+      }
+      if (!install.useEquipment) {
+        $flow.find('input[name="equipment[]"]').prop('checked', false);
+      } else {
+        applyEquipmentDependencies();
+      }
+      if (mode !== 'time_range') {
+        $flow.find('input[name="booking_time_slots[]"]').prop('checked', false);
+      }
+
+      updateScheduleNotice();
+      updateSlotsAvailability();
+      updateFormAvailability();
+      updateContinueState();
+      syncLinkedScheduler();
+    }
+
+    $flow.on('change input', 'input,select,textarea', updateVisibility);
+    $flow.on('click', 'input[name="equipment[]"][data-cie-locked="1"]', function (event) {
+      event.preventDefault();
+      $(this).prop('checked', true);
+    });
+    $flow.on('click', '[data-cie-form-av-nav]', function (event) {
+      event.preventDefault();
+      var delta = parseInt(String($(this).attr('data-cie-form-av-nav')), 10);
+      if (!delta) return;
+      formAvailabilityState.currentMonth = new Date(
+        formAvailabilityState.currentMonth.getFullYear(),
+        formAvailabilityState.currentMonth.getMonth() + delta,
+        1
+      );
+      updateFormAvailability();
+    });
+    $flow.on('click', '[data-cie-form-day]', function () {
+      var date = String($(this).attr('data-cie-form-day') || '');
+      if (date) openDayDetails(date, 'general');
+    });
+    $flow.on('click', '[data-cie-continue]', function (event) {
+      event.preventDefault();
+      if (!canContinue()) return;
+      setDetailsVisible(true);
+      var $details = $flow.find('[data-cie-phase="details"]');
+      if ($details.length) {
+        $('html, body').animate({ scrollTop: Math.max(0, $details.offset().top - 30) }, 200);
+      }
+    });
+    $flow.on('change', 'input[name="booking_time_slots[]"]', function () {
+      var $chip = $(this).closest('.cie-slot-chip');
+      $chip.toggleClass('is-selected', $(this).is(':checked'));
+      updateScheduleNotice();
+      updateContinueState();
+      updateFormAvailability();
+    });
+    if ($flow.find('input[name="has_courses"]:checked').length || String($flow.find('input[name="project_name"]').val() || '').trim()) {
+      setDetailsVisible(true);
+    }
+    updateVisibility();
+  }
+
+  function renderEventChip(event, withTime) {
+    var classes = [
+      'cie-scheduler__event-chip',
+      event.type === 'block' ? 'is-block' : 'is-booking',
+      resourceTypeClass(event.resourceType || '')
+    ].join(' ');
+    var label = (withTime && event.start ? event.start + ' ' : '') + (event.title || 'Reserva');
+    var attrs = '';
+    if (event.type === 'booking' && event.bookingId) {
+      attrs = ' data-cie-booking-id="' + event.bookingId + '" role="button" tabindex="0"';
+    }
+    return '<span class="' + classes + '"' + attrs + '>' + escapeHtml(label) + '</span>';
+  }
+
+  function renderScheduler($container) {
+    if (!$container.length) return;
+    var scope = String($container.attr('data-cie-calendar-scope') || 'general');
+    var defaultView = String($container.attr('data-cie-default-view') || 'month');
+    var state = {
+      view: (defaultView === 'week' || defaultView === 'day') ? defaultView : 'month',
+      current: new Date(),
+      events: [],
+      filterType: 'all',
+      filterResource: 'all'
+    };
+
+    function rangeForView() {
+      if (state.view === 'month') {
+        var first = monthStart(state.current);
+        var last = monthEnd(state.current);
+        return { start: toYmd(first), end: toYmd(last) };
+      }
+      if (state.view === 'week') {
+        var weekStart = startOfWeek(state.current);
+        return { start: toYmd(weekStart), end: toYmd(addDays(weekStart, 6)) };
+      }
+      return { start: toYmd(state.current), end: toYmd(state.current) };
+    }
+
+    function move(delta) {
+      if (state.view === 'month') state.current = new Date(state.current.getFullYear(), state.current.getMonth() + delta, 1);
+      else if (state.view === 'week') state.current = addDays(state.current, delta * 7);
+      else state.current = addDays(state.current, delta);
+      load();
+    }
+
+    function eventsByDate() {
+      var map = {};
+      filteredEvents().forEach(function (event) {
+        if (!map[event.date]) map[event.date] = [];
+        map[event.date].push(event);
+      });
+      return map;
+    }
+
+    function resourceOptions() {
+      var seen = {};
+      state.events.forEach(function (event) {
+        (Array.isArray(event.resources) ? event.resources : []).forEach(function (name) {
+          var key = String(name || '').trim();
+          if (!key) return;
+          seen[key] = key;
+        });
+      });
+      return Object.keys(seen).sort();
+    }
+
+    function filteredEvents() {
+      return state.events.filter(function (event) {
+        if (state.filterType !== 'all' && event.type === 'booking' && String(event.resourceType || 'space') !== state.filterType) {
+          return false;
+        }
+        if (state.filterResource !== 'all') {
+          var names = Array.isArray(event.resources) ? event.resources : [];
+          if (event.type === 'block' && event.isGlobal) return true;
+          if (names.indexOf(state.filterResource) === -1) return false;
+        }
+        return true;
+      });
+    }
+
+    function capitalize(str) {
+     return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function renderToolbar() {
+      var label = '';
+      var options = resourceOptions();
+      if (state.view === 'month') {
+        label = state.current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      } else if (state.view === 'week') {
+        //var s = startOfWeek(state.current);
+        //label = formatLongDate(toYmd(s)) + ' - ' + formatLongDate(toYmd(addDays(s, 6)));
+       
+          var s = startOfWeek(state.current);
+          var e = addDays(s, 6);
+
+          var startMonth = s.toLocaleDateString('es-ES', { month: 'long' });
+          var endMonth = e.toLocaleDateString('es-ES', { month: 'long' });
+
+          var startYear = s.getFullYear();
+          var endYear = e.getFullYear();
+
+          if (startMonth === endMonth && startYear === endYear) {
+            // Misma semana dentro del mismo mes
+            label = `${capitalize(startMonth)} ${startYear}`;
+          } else if (startYear === endYear) {
+            // Mes distinto pero mismo año
+            label = `${capitalize(startMonth)} - ${capitalize(endMonth)} ${startYear}`;
+          } else {
+            // Año distinto (caso raro, pero posible en diciembre/enero)
+            label = `${capitalize(startMonth)} ${startYear} - ${capitalize(endMonth)} ${endYear}`;
+          }
+        
+
+      } else {
+        label = formatLongDate(toYmd(state.current));
+      }
+      return (
+        '<div class="cie-scheduler__toolbar">' +
+          '<div class="cie-scheduler__nav">' +
+            '<button type="button" data-cie-nav="-1">&larr;</button>' +
+            '<button type="button" data-cie-today="1">Hoy</button>' +
+            '<button type="button" data-cie-nav="1">&rarr;</button>' +
+          '</div>' +
+          '<div class="cie-scheduler__title">' + escapeHtml(label) + '</div>' +
+          '<div class="cie-scheduler__views">' +
+            '<select data-cie-view-select>' +
+              '<option value="month"' + (state.view === 'month' ? ' selected' : '') + '>Mes</option>' +
+              '<option value="week"' + (state.view === 'week' ? ' selected' : '') + '>Semana</option>' +
+              '<option value="day"' + (state.view === 'day' ? ' selected' : '') + '>Día</option>' +
+            '</select>' +
+          '</div>' +
+          '<!--<div class="cie-scheduler__filters">' +
+            '<select data-cie-filter-type>' +
+              '<option value="all"' + (state.filterType === 'all' ? ' selected' : '') + '>Todos</option>' +
+              '<option value="combined"' + (state.filterType === 'combined' ? ' selected' : '') + '>Combinada</option>' +
+              '<option value="equipment"' + (state.filterType === 'equipment' ? ' selected' : '') + '>Solo equipo</option>' +
+              '<option value="space"' + (state.filterType === 'space' ? ' selected' : '') + '>Solo espacio</option>' +
+            '</select>' +
+            '<select data-cie-filter-resource>' +
+              '<option value="all"' + (state.filterResource === 'all' ? ' selected' : '') + '>Todos los recursos</option>' +
+              options.map(function (name) {
+                return '<option value="' + escapeHtml(name) + '"' + (state.filterResource === name ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div> -->' +
+        '</div>'
+      );
+    }
+
+    function renderMonth() {
+      var first = monthStart(state.current);
+      var gridStart = startOfWeek(first);
+      var byDate = eventsByDate();
+      var html = '<div class="cie-scheduler__month">';
+      html += '<div class="cie-scheduler__week-header"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div>';
+      html += '<div class="cie-scheduler__month-grid">';
+      for (var i = 0; i < 42; i++) {
+        var day = addDays(gridStart, i);
+        var ymd = toYmd(day);
+        var events = byDate[ymd] || [];
+        var inMonth = day.getMonth() === first.getMonth();
+        html += '<div class="cie-scheduler__day ' + (inMonth ? '' : 'is-muted') + '" data-cie-open-day="' + ymd + '">';
+        html += '<span class="cie-scheduler__day-number">' + day.getDate() + '</span>';
+        html += '<span class="cie-scheduler__day-events">';
+        events.slice(0, 2).forEach(function (event) {
+          html += renderEventChip(event, false);
+        });
+        if (events.length > 2) {
+          html += '<span class="cie-scheduler__event-more">+' + (events.length - 2) + '</span>';
+        }
+        html += '</span></div>';
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    function renderWeekOrDay() {
+      var start = state.view === 'week' ? startOfWeek(state.current) : new Date(state.current.getTime());
+      var days = state.view === 'week' ? 7 : 1;
+      var rowStyle = ' style="grid-template-columns:76px repeat(' + days + ', minmax(0, 1fr));"';
+      var byDate = eventsByDate();
+      var html = '<div class="cie-scheduler__time-grid">';
+      html += '<div class="cie-scheduler__time-header"' + rowStyle + '><span></span>';
+      for (var d = 0; d < days; d++) {
+        var day = addDays(start, d);
+        var ymd = toYmd(day);
+
+        var weekday = day.toLocaleDateString('es-ES', { weekday: 'short' });
+        var dayNumber = day.toLocaleDateString('es-ES', { day: 'numeric' });
+
+        // quitar punto y poner en mayúsculas
+        weekday = weekday.replace('.', '').toUpperCase();
+
+        html += '<div class="day-header"><div class="weekday">' + escapeHtml(weekday) +'</div><div class="day-number">' + escapeHtml(dayNumber) + '</div></div>';
+
+        //html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">'+ escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
+      }
+      html += '</div>';
+
+      html += '<div class="cie-scheduler__all-day-row"' + rowStyle + '><div class="cie-scheduler__time-label">Todo el día</div>';
+      for (var a = 0; a < days; a++) {
+        var allDayDate = toYmd(addDays(start, a));
+        var fullDayEvents = (byDate[allDayDate] || []).filter(function (event) { return !!event.fullDay; });
+        html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + allDayDate + '">';
+        fullDayEvents.forEach(function (event) {
+          html += renderEventChip(event, false);
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      for (var hour = 8; hour < 20; hour++) {
+        var rowStart = hour * 60;
+        var rowEnd = (hour + 1) * 60;
+        html += '<div class="cie-scheduler__time-row"' + rowStyle + '><div class="cie-scheduler__time-label">' + String(hour).padStart(2, '0') + ':00</div>';
+        for (var c = 0; c < days; c++) {
+          var cellDate = toYmd(addDays(start, c));
+          var cellEvents = (byDate[cellDate] || []).filter(function (event) {
+            if (event.fullDay || event.type === 'block') return false;
+            var evStart = timeToMinutes(event.start || '');
+            return evStart >= rowStart && evStart < rowEnd;
+          });
+          html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + cellDate + '">';
+          cellEvents.forEach(function (event) {
+            html += renderEventChip(event, true);
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function render() {
+      var html = renderToolbar();
+      html += state.view === 'month' ? renderMonth() : renderWeekOrDay();
+      $container.html(html);
+    }
+
+    function load() {
+      if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
+        $container.html('<p>No se pudo cargar el calendario.</p>');
+        return;
+      }
+      var range = rangeForView();
+      $container.html('<div class="cie-cal-muted">Cargando calendario...</div>');
+      $.post(window.CieLabBooking.ajaxUrl, {
+        action: 'cie_lab_booking_calendar_feed',
+        nonce: window.CieLabBooking.nonce,
+        start_date: range.start,
+        end_date: range.end,
+        calendar_scope: scope
+      }).done(function (response) {
+        if (!response || !response.success || !response.data || !Array.isArray(response.data.events)) {
+          $container.html('<p>No se pudo cargar el calendario.</p>');
+          return;
+        }
+        state.events = response.data.events;
+        render();
+      }).fail(function () {
+        $container.html('<p>No se pudo cargar el calendario.</p>');
+      });
+    }
+
+    $container.on('click', '[data-cie-nav]', function () {
+      move(parseInt(String($(this).attr('data-cie-nav')), 10));
+    });
+    $container.on('click', '[data-cie-today]', function () {
+      state.current = new Date();
+      load();
+    });
+    $container.on('change', '[data-cie-view-select]', function () {
+      state.view = String($(this).val() || 'month');
+      load();
+    });
+    $container.on('change', '[data-cie-filter-type]', function () {
+      state.filterType = String($(this).val() || 'all');
+      render();
+    });
+    $container.on('change', '[data-cie-filter-resource]', function () {
+      state.filterResource = String($(this).val() || 'all');
+      render();
+    });
+    $container.on('click', '[data-cie-open-day]', function (event) {
+      event.preventDefault();
+      if ($(event.target).closest('[data-cie-booking-id]').length) return;
+      var date = String($(this).attr('data-cie-open-day') || '');
+      if (date) {
+        openDayDetails(date, scope, {
+          resourceType: state.filterType,
+          resourceName: state.filterResource
+        });
+      }
+    });
+    $container.on('click keydown', '[data-cie-booking-id]', function (event) {
+      if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopPropagation();
+      openBookingDetails($(this).attr('data-cie-booking-id'));
+    });
+
+    $container.data('cieSchedulerApi', {
+      setFilters: function (filters) {
+        if (!filters || typeof filters !== 'object') return;
+        if (filters.resourceType) {
+          state.filterType = String(filters.resourceType);
+        }
+        if (Array.isArray(filters.resourceNames) && filters.resourceNames.length) {
+          state.filterResource = String(filters.resourceNames[0]);
+        } else {
+          state.filterResource = 'all';
+        }
+        render();
+      },
+      setFocusDate: function (ymd) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return;
+        var next = parseYmd(String(ymd));
+        if (toYmd(state.current) === toYmd(next)) return;
+        state.current = next;
+        load();
+      }
+    });
+
+    load();
+  }
+
+  $(function () {
+    $('.cie-scheduler[data-cie-scheduler="1"]').each(function () {
+      renderScheduler($(this));
+    });
+
+    $('.cie-lab-booking__flow[data-cie-booking-flow="2"]').each(function () {
+      initBookingForm($(this));
+    });
+
+    $(document).on('click', '[data-cie-booking-id]', function (event) {
+      if ($(event.target).closest('.cie-scheduler').length) return;
+      event.preventDefault();
+      openBookingDetails($(this).attr('data-cie-booking-id'));
+    });
+
+    $(document).on('click', '.cie-booking-edit-link', function (event) {
+      var $link = $(this);
+      var bookingId = parseInt(String($link.data('bookingId') || ''), 10);
+      if (!bookingId) return;
+      event.preventDefault();
+      var baseUrl = String($link.data('formUrl') || $link.attr('href') || window.location.href);
+      try {
+        var url = new URL(baseUrl, window.location.href);
+        url.searchParams.set('booking_id', String(bookingId));
+        url.searchParams.set('cie_booking_edit', '1');
+        url.hash = 'cie-booking-form';
+        window.location.assign(url.toString());
+      } catch (error) {
+        window.location.assign(baseUrl);
+      }
     });
   });
 })(jQuery);
