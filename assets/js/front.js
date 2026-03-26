@@ -872,14 +872,40 @@
       });
     }
 
+    function capitalize(str) {
+     return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
     function renderToolbar() {
       var label = '';
       var options = resourceOptions();
       if (state.view === 'month') {
         label = state.current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
       } else if (state.view === 'week') {
-        var s = startOfWeek(state.current);
-        label = formatLongDate(toYmd(s)) + ' - ' + formatLongDate(toYmd(addDays(s, 6)));
+        //var s = startOfWeek(state.current);
+        //label = formatLongDate(toYmd(s)) + ' - ' + formatLongDate(toYmd(addDays(s, 6)));
+       
+          var s = startOfWeek(state.current);
+          var e = addDays(s, 6);
+
+          var startMonth = s.toLocaleDateString('es-ES', { month: 'long' });
+          var endMonth = e.toLocaleDateString('es-ES', { month: 'long' });
+
+          var startYear = s.getFullYear();
+          var endYear = e.getFullYear();
+
+          if (startMonth === endMonth && startYear === endYear) {
+            // Misma semana dentro del mismo mes
+            label = `${capitalize(startMonth)} ${startYear}`;
+          } else if (startYear === endYear) {
+            // Mes distinto pero mismo año
+            label = `${capitalize(startMonth)} - ${capitalize(endMonth)} ${startYear}`;
+          } else {
+            // Año distinto (caso raro, pero posible en diciembre/enero)
+            label = `${capitalize(startMonth)} ${startYear} - ${capitalize(endMonth)} ${endYear}`;
+          }
+        
+
       } else {
         label = formatLongDate(toYmd(state.current));
       }
@@ -892,11 +918,13 @@
           '</div>' +
           '<div class="cie-scheduler__title">' + escapeHtml(label) + '</div>' +
           '<div class="cie-scheduler__views">' +
-            '<button type="button" data-cie-view="month"' + (state.view === 'month' ? ' class="is-active"' : '') + '>Mes</button>' +
-            '<button type="button" data-cie-view="week"' + (state.view === 'week' ? ' class="is-active"' : '') + '>Semana</button>' +
-            '<button type="button" data-cie-view="day"' + (state.view === 'day' ? ' class="is-active"' : '') + '>Día</button>' +
+            '<select data-cie-view-select>' +
+              '<option value="month"' + (state.view === 'month' ? ' selected' : '') + '>Mes</option>' +
+              '<option value="week"' + (state.view === 'week' ? ' selected' : '') + '>Semana</option>' +
+              '<option value="day"' + (state.view === 'day' ? ' selected' : '') + '>Día</option>' +
+            '</select>' +
           '</div>' +
-          '<div class="cie-scheduler__filters">' +
+          '<!--<div class="cie-scheduler__filters">' +
             '<select data-cie-filter-type>' +
               '<option value="all"' + (state.filterType === 'all' ? ' selected' : '') + '>Todos</option>' +
               '<option value="combined"' + (state.filterType === 'combined' ? ' selected' : '') + '>Combinada</option>' +
@@ -909,7 +937,7 @@
                 return '<option value="' + escapeHtml(name) + '"' + (state.filterResource === name ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
               }).join('') +
             '</select>' +
-          '</div>' +
+          '</div> -->' +
         '</div>'
       );
     }
@@ -951,7 +979,16 @@
       for (var d = 0; d < days; d++) {
         var day = addDays(start, d);
         var ymd = toYmd(day);
-        html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">' + escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
+
+        var weekday = day.toLocaleDateString('es-ES', { weekday: 'short' });
+        var dayNumber = day.toLocaleDateString('es-ES', { day: 'numeric' });
+
+        // quitar punto y poner en mayúsculas
+        weekday = weekday.replace('.', '').toUpperCase();
+
+        html += '<div class="day-header"><div class="weekday">' + escapeHtml(weekday) +'</div><div class="day-number">' + escapeHtml(dayNumber) + '</div></div>';
+
+        //html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">'+ escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
       }
       html += '</div>';
 
@@ -1028,8 +1065,8 @@
       state.current = new Date();
       load();
     });
-    $container.on('click', '[data-cie-view]', function () {
-      state.view = String($(this).attr('data-cie-view') || 'month');
+    $container.on('change', '[data-cie-view-select]', function () {
+      state.view = String($(this).val() || 'month');
       load();
     });
     $container.on('change', '[data-cie-filter-type]', function () {
