@@ -53,6 +53,107 @@
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
+  function formatDayMonth(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return ymd || '';
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+
+  function formatWeekdayDayMonth(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return ymd || '';
+    return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
+  }
+
+  function uniqueDatesFromOccurrences(occurrences) {
+    var map = {};
+    (Array.isArray(occurrences) ? occurrences : []).forEach(function (occ) {
+      var date = String((occ && occ.date) || '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) map[date] = true;
+    });
+    return Object.keys(map).sort();
+  }
+
+  function areConsecutiveDates(dates) {
+    if (!dates.length) return false;
+    for (var i = 1; i < dates.length; i++) {
+      var prev = parseYmd(dates[i - 1]);
+      var cur = parseYmd(dates[i]);
+      if (!prev || !cur) return false;
+      var diff = Math.round((cur.getTime() - prev.getTime()) / 86400000);
+      if (diff !== 1) return false;
+    }
+    return true;
+  }
+
+  function describeBookingDates(booking) {
+    var dates = uniqueDatesFromOccurrences(booking.occurrences);
+    if (!dates.length) {
+      var start = String(booking.start_date || '');
+      var end = String(booking.end_date || '');
+      if (start && end && start !== end) return formatDayMonth(start) + ' - ' + formatDayMonth(end);
+      if (start) return formatWeekdayDayMonth(start);
+      return '';
+    }
+    if (dates.length === 1) return formatWeekdayDayMonth(dates[0]);
+    if (areConsecutiveDates(dates)) {
+      return formatDayMonth(dates[0]) + ' - ' + formatDayMonth(dates[dates.length - 1]);
+    }
+    return dates.map(formatDayMonth).join(', ');
+  }
+
+  function describeBookingDuration(booking) {
+    var mode = String(booking.mode || '');
+    if (mode === 'full_day') return 'Todo el día';
+    var slots = Array.isArray(booking.time_slots) ? booking.time_slots : [];
+    if (slots.length === 1 && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slots[0])) {
+      var p = String(slots[0]).split('-');
+      return 'De ' + p[0] + ' a ' + p[1] + ' horas';
+    }
+    if (booking.time_start && booking.time_end) {
+      return 'De ' + booking.time_start + ' a ' + booking.time_end + ' horas';
+    }
+    if (slots.length > 1) {
+      return 'Por horas (' + slots.join(', ') + ')';
+    }
+    return 'Por horas';
+  }
+
+  function weekdayNameForDate(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return '';
+    return d.toLocaleDateString('es-ES', { weekday: 'long' });
+  }
+
+  function describeBookingRepeat(booking) {
+    var frequency = String(booking.frequency || 'single');
+    var dates = uniqueDatesFromOccurrences(booking.occurrences);
+    if (frequency === 'single') return 'Sin repetición';
+    if (frequency === 'daily') return 'Cada día';
+    if (frequency === 'biweekly_repeat') return 'Semana salteada';
+    if (frequency === 'weekly_repeat') {
+      if (dates.length === 1) {
+        var w = weekdayNameForDate(dates[0]);
+        return w ? ('Todos los ' + w) : 'Cada semana';
+      }
+      var labels = {};
+      dates.slice(0, 7).forEach(function (date) {
+        var d = parseYmd(date);
+        if (!d) return;
+        labels[d.getDay()] = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+      });
+      var days = Object.keys(labels).sort().map(function (k) { return labels[k]; });
+      return days.length ? ('Cada semana ' + days.join(', ')) : 'Cada semana';
+    }
+    return 'Sin repetición';
+  }
+
+  function bookingUntilDate(booking) {
+    var dates = uniqueDatesFromOccurrences(booking.occurrences);
+    if (dates.length) return dates[dates.length - 1];
+    return String(booking.end_date || '');
+  }
+
   function timeToMinutes(value) {
     if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return -1;
     var parts = String(value).split(':');
@@ -215,9 +316,12 @@
       var booking = response.data;
       var html = '<h4>' + escapeHtml(booking.title || ('Reserva #' + booking.id)) + '</h4>';
       html += '<p><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></p>';
-      html += '<p><strong>Rango:</strong> ' + escapeHtml(booking.start_date || '') + ' - ' + escapeHtml(booking.end_date || '') + '</p>';
-      if (booking.time_start && booking.time_end) {
-        html += '<p><strong>Horario:</strong> ' + escapeHtml(booking.time_start + ' - ' + booking.time_end) + '</p>';
+      html += '<p><strong>Fecha:</strong> ' + escapeHtml(describeBookingDates(booking)) + '</p>';
+      html += '<p><strong>Duración:</strong> ' + escapeHtml(describeBookingDuration(booking)) + '</p>';
+      html += '<p><strong>Repetición:</strong> ' + escapeHtml(describeBookingRepeat(booking)) + '</p>';
+      var until = bookingUntilDate(booking);
+      if (until) {
+        html += '<p><strong>Hasta:</strong> ' + escapeHtml(formatLongDate(until)) + '</p>';
       }
       if (Array.isArray(booking.resources) && booking.resources.length) {
         html += '<p><strong>Recursos:</strong> ' + escapeHtml(booking.resources.join(', ')) + '</p>';
@@ -226,17 +330,6 @@
         html += '<h5>Proyecto</h5>';
         html += '<p><strong>Nombre:</strong> ' + escapeHtml(booking.project.name) + '</p>';
         html += '<p><strong>Responsable:</strong> ' + escapeHtml(booking.project.responsible || '') + '</p>';
-      }
-      if (Array.isArray(booking.occurrences) && booking.occurrences.length) {
-        html += '<h5>Ocurrencias</h5><ul>';
-        booking.occurrences.slice(0, 30).forEach(function (occ) {
-          var line = occ.date + (occ.full_day ? ' (día completo)' : ' (' + occ.start + ' - ' + occ.end + ')');
-          html += '<li>' + escapeHtml(line) + '</li>';
-        });
-        if (booking.occurrences.length > 30) {
-          html += '<li>+' + (booking.occurrences.length - 30) + ' ocurrencias más</li>';
-        }
-        html += '</ul>';
       }
       $modal.find('.cie-modal__content').html(html);
     }).fail(function () {
@@ -288,6 +381,24 @@
           return block.resources.indexOf(resourceFilter) !== -1;
         });
       }
+      bookings.sort(function (a, b) {
+        var aOcc = Array.isArray(a.occurrences) ? a.occurrences : [];
+        var bOcc = Array.isArray(b.occurrences) ? b.occurrences : [];
+        var aFirst = aOcc.length ? aOcc[0] : null;
+        var bFirst = bOcc.length ? bOcc[0] : null;
+        var aDate = String((aFirst && aFirst.date) || a.start_date || date || '');
+        var bDate = String((bFirst && bFirst.date) || b.start_date || date || '');
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        var aStart = String((aFirst && aFirst.start) || '');
+        var bStart = String((bFirst && bFirst.start) || '');
+        var aMin = aStart ? timeToMinutes(aStart) : 0;
+        var bMin = bStart ? timeToMinutes(bStart) : 0;
+        if (aMin !== bMin) return aMin - bMin;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
+      blocks.sort(function (a, b) {
+        return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+      });
       var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
       html += renderTimelineSlots(date, bookings, blocks);
 
@@ -365,6 +476,10 @@
       currentMonth: monthStart(new Date()),
       cache: {}
     };
+    var maxWeeks = parseInt(String($flow.attr('data-cie-max-weeks') || '5'), 10);
+    if (!maxWeeks || maxWeeks < 1) maxWeeks = 5;
+    var maxRangeDays = parseInt(String($flow.attr('data-cie-max-range-days') || '5'), 10);
+    if (!maxRangeDays || maxRangeDays < 1) maxRangeDays = 5;
 
     function selectedMode() {
       return String($flow.find('[name="booking_mode"]').val() || 'full_day');
@@ -382,10 +497,28 @@
       return String($flow.find('input[name="booking_installation_type"]:checked').val() || 'combined');
     }
 
+    function syncFrequencyOptions() {
+      var dayScope = selectedDayScope();
+      var scopeKey = dayScope === 'single_day' ? 'single_day' : 'all';
+      var $select = $flow.find('select[name="booking_frequency"]');
+      if (!$select.length) return;
+      $select.find('option').each(function () {
+        var allowed = String($(this).attr('data-cie-frequency-scope') || 'all');
+        var visible = allowed === 'all' || allowed === scopeKey;
+        $(this).prop('disabled', !visible).toggle(visible);
+      });
+      var current = String($select.val() || 'single');
+      var $current = $select.find('option[value="' + current + '"]');
+      if (!$current.length || $current.prop('disabled')) {
+        $select.val('single');
+      }
+      $flow.find('input[name="booking_recurrence_weeks"]').attr('max', String(maxWeeks));
+    }
+
     function selectedPrimaryDate() {
-      var frequency = selectedFrequency();
+      var dayScope = selectedDayScope();
       var start = String($flow.find('input[name="start_date"]').val() || '').trim();
-      if (frequency === 'manual_dates') {
+      if (dayScope === 'loose_days') {
         var raw = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
         if (!raw) return '';
         return raw.split(/[,\s;]+/).filter(Boolean)[0] || '';
@@ -517,18 +650,24 @@
 
       if (frequency === 'single') {
         if (mode === 'full_day') {
-          summary = dayScope === 'date_range' && end
-            ? 'Reserva de día completo del ' + formatLongDate(start) + ' al ' + formatLongDate(end) + '.'
-            : 'Reserva de día completo para ' + formatLongDate(start) + '.';
+          if (dayScope === 'date_range' && end) {
+            summary = 'Reserva de día completo del ' + formatLongDate(start) + ' al ' + formatLongDate(end) + '.';
+          } else if (dayScope === 'loose_days') {
+            summary = 'Reserva de día completo para días sueltos' + (manual ? ' (' + manual + ').' : '.');
+          } else {
+            summary = 'Reserva de día completo para ' + formatLongDate(start) + '.';
+          }
         } else {
-          summary = 'Reserva por horas para ' + formatLongDate(start) + ' (' + (slots.length || 0) + ' bloques seleccionados).';
+          summary = dayScope === 'loose_days'
+            ? 'Reserva por horas en días sueltos (' + (slots.length || 0) + ' bloques seleccionados).'
+            : 'Reserva por horas para ' + formatLongDate(start) + ' (' + (slots.length || 0) + ' bloques seleccionados).';
         }
+      } else if (frequency === 'daily') {
+        summary = (mode === 'full_day' ? 'Reserva diaria de día completo' : 'Reserva diaria por horas') + ' durante ' + (weeks || 1) + ' semanas.';
       } else if (frequency === 'weekly_repeat') {
-        summary =
-          (mode === 'full_day' ? 'Reserva semanal de día completo' : 'Reserva semanal por horas') +
-          ' durante ' +
-          (weeks || 1) +
-          ' semanas.';
+        summary = (mode === 'full_day' ? 'Reserva semanal de día completo' : 'Reserva semanal por horas') + ' durante ' + (weeks || 1) + ' semanas.';
+      } else if (frequency === 'biweekly_repeat') {
+        summary = (mode === 'full_day' ? 'Reserva en semanas salteadas de día completo' : 'Reserva en semanas salteadas por horas') + ' durante ' + (weeks || 1) + ' semanas.';
       } else {
         summary =
           (mode === 'full_day' ? 'Reserva de días sueltos' : 'Reserva por horas en días sueltos') +
@@ -675,40 +814,10 @@
       });
     }
 
-    function canContinue() {
-      var install = syncInstallationHiddenInputs();
-      var resources = selectedResources();
-      var mode = selectedMode();
-      var frequency = selectedFrequency();
-      var dayScope = selectedDayScope();
-      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
-      var end = String($flow.find('input[name="end_date"]').val() || '').trim();
-      var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
-      var hasResources = (!install.useSpace || resources.spaces.length > 0) && (!install.useEquipment || resources.equipment.length > 0);
-      if (!hasResources) return false;
-      if (frequency === 'manual_dates') {
-        if (!manual) return false;
-      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-        return false;
-      }
-      if (frequency === 'single' && dayScope === 'date_range' && !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
-        return false;
-      }
-      if (mode === 'time_range' && !selectedTimeSlots().length) {
-        return false;
-      }
-      return true;
-    }
-
-    function updateContinueState() {
-      var $continue = $flow.find('[data-cie-continue]');
-      var allow = canContinue();
-      $continue.toggle(allow);
-      $continue.prop('disabled', !allow);
-    }
+    function updateContinueState() {}
 
     function setDetailsVisible(show) {
-      $flow.find('[data-cie-phase="details"]').toggle(show);
+      $flow.find('[data-cie-phase="details"]').show();
     }
 
     function updateVisibility() {
@@ -716,6 +825,7 @@
       var frequency = selectedFrequency();
       var dayScope = selectedDayScope();
       var install = syncInstallationHiddenInputs();
+      syncFrequencyOptions();
 
       $flow.find('[data-cie-only-mode]').each(function () {
         $(this).toggle(String($(this).attr('data-cie-only-mode')) === mode);
@@ -741,6 +851,23 @@
       if (mode !== 'time_range') {
         $flow.find('input[name="booking_time_slots[]"]').prop('checked', false);
       }
+      var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
+      if (!weeks || weeks < 1) weeks = 1;
+      if (weeks > maxWeeks) {
+        weeks = maxWeeks;
+        $flow.find('input[name="booking_recurrence_weeks"]').val(String(maxWeeks));
+      }
+      if (dayScope === 'date_range') {
+        var start = parseYmd(String($flow.find('input[name="start_date"]').val() || ''));
+        var end = parseYmd(String($flow.find('input[name="end_date"]').val() || ''));
+        if (start && end) {
+          var diff = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+          if (diff > maxRangeDays) {
+            var cap = addDays(start, maxRangeDays - 1);
+            $flow.find('input[name="end_date"]').val(toYmd(cap));
+          }
+        }
+      }
 
       updateScheduleNotice();
       updateSlotsAvailability();
@@ -749,7 +876,10 @@
       syncLinkedScheduler();
     }
 
-    $flow.on('change input', 'input,select,textarea', updateVisibility);
+    $flow.on('change input', 'input,select,textarea', function (event) {
+      if ($(event.target).is('input[name="booking_time_slots[]"]')) return;
+      updateVisibility();
+    });
     $flow.on('click', 'input[name="equipment[]"][data-cie-locked="1"]', function (event) {
       event.preventDefault();
       $(this).prop('checked', true);
@@ -771,7 +901,6 @@
     });
     $flow.on('click', '[data-cie-continue]', function (event) {
       event.preventDefault();
-      if (!canContinue()) return;
       setDetailsVisible(true);
       var $details = $flow.find('[data-cie-phase="details"]');
       if ($details.length) {
@@ -782,12 +911,8 @@
       var $chip = $(this).closest('.cie-slot-chip');
       $chip.toggleClass('is-selected', $(this).is(':checked'));
       updateScheduleNotice();
-      updateContinueState();
-      updateFormAvailability();
     });
-    if ($flow.find('input[name="has_courses"]:checked').length || String($flow.find('input[name="project_name"]').val() || '').trim()) {
-      setDetailsVisible(true);
-    }
+    setDetailsVisible(true);
     updateVisibility();
   }
 
@@ -946,6 +1071,7 @@
       var first = monthStart(state.current);
       var gridStart = startOfWeek(first);
       var byDate = eventsByDate();
+      var todayYmd = toYmd(new Date());
       var html = '<div class="cie-scheduler__month">';
       html += '<div class="cie-scheduler__week-header"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div>';
       html += '<div class="cie-scheduler__month-grid">';
@@ -954,14 +1080,17 @@
         var ymd = toYmd(day);
         var events = byDate[ymd] || [];
         var inMonth = day.getMonth() === first.getMonth();
-        html += '<div class="cie-scheduler__day ' + (inMonth ? '' : 'is-muted') + '" data-cie-open-day="' + ymd + '">';
+        var dayClasses = ['cie-scheduler__day'];
+        if (!inMonth) dayClasses.push('is-muted');
+        if (ymd === todayYmd) dayClasses.push('is-today');
+        html += '<div class="' + dayClasses.join(' ') + '" data-cie-open-day="' + ymd + '">';
         html += '<span class="cie-scheduler__day-number">' + day.getDate() + '</span>';
         html += '<span class="cie-scheduler__day-events">';
         events.slice(0, 2).forEach(function (event) {
           html += renderEventChip(event, false);
         });
         if (events.length > 2) {
-          html += '<span class="cie-scheduler__event-more">+' + (events.length - 2) + '</span>';
+          html += '<span class="cie-scheduler__event-more"><button type="button" class="cie-scheduler__event-more-link" data-cie-open-day-more="' + ymd + '">Ver más…</button></span>';
         }
         html += '</span></div>';
       }
@@ -974,6 +1103,9 @@
       var days = state.view === 'week' ? 7 : 1;
       var rowStyle = ' style="grid-template-columns:76px repeat(' + days + ', minmax(0, 1fr));"';
       var byDate = eventsByDate();
+      var now = new Date();
+      var todayYmd = toYmd(now);
+      var nowMinutes = (now.getHours() * 60) + now.getMinutes();
       var html = '<div class="cie-scheduler__time-grid">';
       html += '<div class="cie-scheduler__time-header"' + rowStyle + '><span></span>';
       for (var d = 0; d < days; d++) {
@@ -986,7 +1118,9 @@
         // quitar punto y poner en mayúsculas
         weekday = weekday.replace('.', '').toUpperCase();
 
-        html += '<div class="day-header"><div class="weekday">' + escapeHtml(weekday) +'</div><div class="day-number">' + escapeHtml(dayNumber) + '</div></div>';
+        var dayHeaderClasses = ['day-header'];
+        if (ymd === todayYmd) dayHeaderClasses.push('is-today');
+        html += '<div class="' + dayHeaderClasses.join(' ') + '"><div class="weekday">' + escapeHtml(weekday) +'</div><div class="day-number">' + escapeHtml(dayNumber) + '</div></div>';
 
         //html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">'+ escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
       }
@@ -996,7 +1130,9 @@
       for (var a = 0; a < days; a++) {
         var allDayDate = toYmd(addDays(start, a));
         var fullDayEvents = (byDate[allDayDate] || []).filter(function (event) { return !!event.fullDay; });
-        html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + allDayDate + '">';
+        var allDayClasses = ['cie-scheduler__time-cell'];
+        if (allDayDate === todayYmd) allDayClasses.push('is-today');
+        html += '<div class="' + allDayClasses.join(' ') + '" data-cie-open-day="' + allDayDate + '">';
         fullDayEvents.forEach(function (event) {
           html += renderEventChip(event, false);
         });
@@ -1015,7 +1151,14 @@
             var evStart = timeToMinutes(event.start || '');
             return evStart >= rowStart && evStart < rowEnd;
           });
-          html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + cellDate + '">';
+          var cellClasses = ['cie-scheduler__time-cell'];
+          if (cellDate === todayYmd) {
+            cellClasses.push('is-today');
+            if (nowMinutes >= rowStart && nowMinutes < rowEnd) {
+              cellClasses.push('is-current-time');
+            }
+          }
+          html += '<div class="' + cellClasses.join(' ') + '" data-cie-open-day="' + cellDate + '">';
           cellEvents.forEach(function (event) {
             html += renderEventChip(event, true);
           });
@@ -1079,8 +1222,20 @@
     });
     $container.on('click', '[data-cie-open-day]', function (event) {
       event.preventDefault();
+      if ($(event.target).closest('[data-cie-open-day-more]').length) return;
       if ($(event.target).closest('[data-cie-booking-id]').length) return;
       var date = String($(this).attr('data-cie-open-day') || '');
+      if (date) {
+        openDayDetails(date, scope, {
+          resourceType: state.filterType,
+          resourceName: state.filterResource
+        });
+      }
+    });
+    $container.on('click', '[data-cie-open-day-more]', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      var date = String($(this).attr('data-cie-open-day-more') || '');
       if (date) {
         openDayDetails(date, scope, {
           resourceType: state.filterType,

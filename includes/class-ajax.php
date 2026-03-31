@@ -203,6 +203,18 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			// Front users should always see their own pending/changing bookings in the global calendar.
+			if (!$is_admin && $user_id > 0) {
+				$user_extra = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+				$by_id = [];
+				foreach ($bookings as $booking) {
+					$by_id[(int) $booking->ID] = $booking;
+				}
+				foreach ($user_extra as $booking) {
+					$by_id[(int) $booking->ID] = $booking;
+				}
+				$bookings = array_values($by_id);
+			}
 		}
 
 		$events = [];
@@ -369,6 +381,17 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			if (!$is_admin && $user_id > 0) {
+				$user_extra = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
+				$by_id = [];
+				foreach ($bookings as $booking) {
+					$by_id[(int) $booking->ID] = $booking;
+				}
+				foreach ($user_extra as $booking) {
+					$by_id[(int) $booking->ID] = $booking;
+				}
+				$bookings = array_values($by_id);
+			}
 		}
 		$blocks = Bookings::get_overlapping_blocks($start, $end);
 

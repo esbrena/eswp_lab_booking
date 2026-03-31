@@ -8,15 +8,30 @@ if (!defined('ABSPATH')) {
 
 final class Bookings {
 	public const OPTION_EQUIPMENT_GROUP_LABELS = 'cie_lab_booking_equipment_group_labels';
+	public const OPTION_MAX_RECURRING_WEEKS = 'cie_lab_booking_max_recurrence_weeks';
+	public const OPTION_MAX_RANGE_DAYS = 'cie_lab_booking_max_range_days';
 	public const BOOKING_MODE_FULL_DAY = 'full_day';
 	public const BOOKING_MODE_TIME_RANGE = 'time_range';
 	public const BOOKING_FREQUENCY_SINGLE = 'single';
+	public const BOOKING_FREQUENCY_DAILY = 'daily';
 	public const BOOKING_FREQUENCY_WEEKLY_REPEAT = 'weekly_repeat';
+	public const BOOKING_FREQUENCY_BIWEEKLY_REPEAT = 'biweekly_repeat';
 	public const BOOKING_FREQUENCY_MANUAL_DATES = 'manual_dates';
 	public const BOOKING_DAY_SCOPE_SINGLE = 'single_day';
 	public const BOOKING_DAY_SCOPE_RANGE = 'date_range';
+	public const BOOKING_DAY_SCOPE_LOOSE = 'loose_days';
 	public const BOOKING_TIME_MIN = '08:00';
 	public const BOOKING_TIME_MAX = '20:00';
+
+	public static function get_max_recurrence_weeks(): int {
+		$value = (int) get_option(self::OPTION_MAX_RECURRING_WEEKS, 5);
+		return max(1, min(5, $value));
+	}
+
+	public static function get_max_range_days(): int {
+		$value = (int) get_option(self::OPTION_MAX_RANGE_DAYS, 5);
+		return max(1, min(5, $value));
+	}
 
 	/**
 	 * Equipment dependency rules from the flow annex.
@@ -162,18 +177,6 @@ final class Bookings {
 			return ['ok' => false, 'errors' => $errors];
 		}
 
-		// Availability checks per flow 2.9 (based on calendar of validated bookings + blocks).
-		$conflicts = self::find_conflicts_for_occurrences($occurrences, $spaces, $equipment);
-		if (!empty($conflicts['spaces'])) {
-			$errors[] = __('En las fechas seleccionadas los espacios del laboratorio están reservados. Seleccione otras fechas de reserva.', 'cie-lab-booking');
-		}
-		if (!empty($conflicts['equipment'])) {
-			$errors[] = __('En las fechas seleccionadas los equipos del laboratorio seleccionados están reservados. Seleccione otras fechas de reserva.', 'cie-lab-booking');
-		}
-		if (!empty($conflicts['blocked'])) {
-			$errors[] = __('En las fechas seleccionadas hay días no disponibles por mantenimiento. Seleccione otras fechas de reserva.', 'cie-lab-booking');
-		}
-
 		if ($errors) {
 			return ['ok' => false, 'errors' => $errors];
 		}
@@ -220,7 +223,7 @@ final class Bookings {
 						)
 					)
 				),
-				'booking_recurrence_weeks' => max(1, (int) ($raw['booking_recurrence_weeks'] ?? 1)),
+				'booking_recurrence_weeks' => max(1, min(self::get_max_recurrence_weeks(), (int) ($raw['booking_recurrence_weeks'] ?? 1))),
 				'booking_weekdays' => self::normalize_weekdays((array) ($raw['booking_weekdays'] ?? [])),
 				'booking_selected_dates' => self::extract_selected_dates_from_raw($raw),
 				'occurrences' => $occurrences,
@@ -510,7 +513,7 @@ final class Bookings {
 
 	private static function normalize_booking_frequency(string $frequency): string {
 		$frequency = sanitize_key($frequency);
-		if (!in_array($frequency, [self::BOOKING_FREQUENCY_SINGLE, self::BOOKING_FREQUENCY_WEEKLY_REPEAT, self::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
+		if (!in_array($frequency, [self::BOOKING_FREQUENCY_SINGLE, self::BOOKING_FREQUENCY_DAILY, self::BOOKING_FREQUENCY_WEEKLY_REPEAT, self::BOOKING_FREQUENCY_BIWEEKLY_REPEAT, self::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
 			return self::BOOKING_FREQUENCY_SINGLE;
 		}
 		return $frequency;
@@ -518,7 +521,7 @@ final class Bookings {
 
 	private static function normalize_booking_day_scope(string $scope): string {
 		$scope = sanitize_key($scope);
-		if (!in_array($scope, [self::BOOKING_DAY_SCOPE_SINGLE, self::BOOKING_DAY_SCOPE_RANGE], true)) {
+		if (!in_array($scope, [self::BOOKING_DAY_SCOPE_SINGLE, self::BOOKING_DAY_SCOPE_RANGE, self::BOOKING_DAY_SCOPE_LOOSE], true)) {
 			return self::BOOKING_DAY_SCOPE_SINGLE;
 		}
 		return $scope;
@@ -703,6 +706,9 @@ final class Bookings {
 			$end = $end ?: $range_end;
 		}
 		$day_scope = self::normalize_booking_day_scope((string) ($raw['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE));
+		$selected_dates = self::extract_selected_dates_from_raw($raw);
+		$weeks = max(1, min(self::get_max_recurrence_weeks(), (int) ($raw['booking_recurrence_weeks'] ?? 1)));
+		$max_range_days = self::get_max_range_days();
 
 		$needs_time = $mode === self::BOOKING_MODE_TIME_RANGE;
 		$time_slots = [];
@@ -710,66 +716,92 @@ final class Bookings {
 			$time_slots = self::extract_time_slots_from_request($raw, $time_start, $time_end, $errors);
 		}
 
-		$occurrences = [];
-		if ($frequency === self::BOOKING_FREQUENCY_SINGLE) {
+		$base_dates = [];
+		if ($day_scope === self::BOOKING_DAY_SCOPE_SINGLE) {
 			if (!$start) {
-				$errors[] = __('Seleccione una fecha de inicio válida.', 'cie-lab-booking');
+				$errors[] = __('Seleccione un día válido.', 'cie-lab-booking');
+			} else {
+				$base_dates = [$start];
 			}
-			if ($start) {
-				$date_list = [$start];
-				if ($day_scope === self::BOOKING_DAY_SCOPE_RANGE) {
-					$end = $end ?: $start;
-					if ($end && $end >= $start) {
-						$date_list = self::normalize_date_list(self::build_date_range($start, $end));
-					} elseif ($end && $end < $start) {
-						$errors[] = __('La fecha "hasta" no puede ser anterior a la fecha "desde".', 'cie-lab-booking');
-					}
+		} elseif ($day_scope === self::BOOKING_DAY_SCOPE_RANGE) {
+			if (!$start || !$end) {
+				$errors[] = __('Seleccione un rango de días válido.', 'cie-lab-booking');
+			} elseif ($end < $start) {
+				$errors[] = __('La fecha de fin no puede ser anterior a la de inicio.', 'cie-lab-booking');
+			} else {
+				$base_dates = self::build_date_range($start, $end);
+				if (count($base_dates) > $max_range_days) {
+					$errors[] = sprintf(
+						/* translators: %d max days */
+						__('El rango de días no puede superar %d días.', 'cie-lab-booking'),
+						$max_range_days
+					);
 				}
-				if ($mode === self::BOOKING_MODE_FULL_DAY) {
-					foreach ($date_list as $date) {
-						$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
-					}
-				} else {
-					$occurrences = array_merge($occurrences, self::build_time_occurrences($date_list, $time_slots));
-				}
-			}
-		} elseif ($frequency === self::BOOKING_FREQUENCY_WEEKLY_REPEAT) {
-			if (!$start) {
-				$errors[] = __('Seleccione una fecha de inicio válida para la recurrencia semanal.', 'cie-lab-booking');
-			}
-			$weeks = max(1, min(52, (int) ($raw['booking_recurrence_weeks'] ?? 1)));
-			$weekdays = self::normalize_weekdays((array) ($raw['booking_weekdays'] ?? []));
-			if ($start && !$weekdays) {
-				$weekdays = [(int) gmdate('N', strtotime($start . ' 00:00:00'))];
-			}
-			if ($start) {
-				$total_days = $weeks * 7;
-				for ($i = 0; $i < $total_days; $i++) {
-					$date = gmdate('Y-m-d', strtotime('+' . $i . ' day', strtotime($start . ' 00:00:00')));
-					$weekday = (int) gmdate('N', strtotime($date . ' 00:00:00'));
-					if (!in_array($weekday, $weekdays, true)) {
-						continue;
-					}
-					if ($mode === self::BOOKING_MODE_FULL_DAY) {
-						$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
-					} else {
-						$occurrences = array_merge($occurrences, self::build_time_occurrences([$date], $time_slots));
-					}
+				if (!self::dates_are_same_week($base_dates)) {
+					$errors[] = __('El rango de días debe pertenecer a la misma semana.', 'cie-lab-booking');
 				}
 			}
 		} else {
-			$selected_dates = self::extract_selected_dates_from_raw($raw);
 			if (!$selected_dates) {
-				$errors[] = __('Seleccione al menos una fecha para la reserva.', 'cie-lab-booking');
-			}
-			if ($mode === self::BOOKING_MODE_FULL_DAY) {
-				foreach ($selected_dates as $date) {
-					$occurrences[] = ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
-				}
+				$errors[] = __('Seleccione al menos un día suelto.', 'cie-lab-booking');
 			} else {
-				$occurrences = array_merge($occurrences, self::build_time_occurrences($selected_dates, $time_slots));
+				$base_dates = $selected_dates;
 			}
 		}
+
+		if (!$base_dates) {
+			return [];
+		}
+
+		$expanded_dates = [];
+		if ($day_scope === self::BOOKING_DAY_SCOPE_SINGLE) {
+			$anchor = (string) $base_dates[0];
+			if ($frequency === self::BOOKING_FREQUENCY_DAILY) {
+				$days_total = max(1, $weeks * 7);
+				for ($i = 0; $i < $days_total; $i++) {
+					$expanded_dates[] = gmdate('Y-m-d', strtotime('+' . $i . ' day', strtotime($anchor . ' 00:00:00')));
+				}
+			} elseif ($frequency === self::BOOKING_FREQUENCY_WEEKLY_REPEAT) {
+				for ($i = 0; $i < $weeks; $i++) {
+					$expanded_dates[] = gmdate('Y-m-d', strtotime('+' . ($i * 7) . ' day', strtotime($anchor . ' 00:00:00')));
+				}
+			} elseif ($frequency === self::BOOKING_FREQUENCY_BIWEEKLY_REPEAT) {
+				for ($i = 0; $i < $weeks; $i++) {
+					$expanded_dates[] = gmdate('Y-m-d', strtotime('+' . ($i * 14) . ' day', strtotime($anchor . ' 00:00:00')));
+				}
+			} else {
+				$expanded_dates = $base_dates;
+			}
+		} elseif ($day_scope === self::BOOKING_DAY_SCOPE_RANGE || $day_scope === self::BOOKING_DAY_SCOPE_LOOSE) {
+			if ($frequency === self::BOOKING_FREQUENCY_DAILY) {
+				$errors[] = __('La opción "cada día" solo está disponible cuando selecciona un único día.', 'cie-lab-booking');
+			}
+			if (($frequency === self::BOOKING_FREQUENCY_WEEKLY_REPEAT || $frequency === self::BOOKING_FREQUENCY_BIWEEKLY_REPEAT) && !self::dates_are_same_week($base_dates)) {
+				$errors[] = __('Para repetir semanalmente, los días seleccionados deben pertenecer a la misma semana.', 'cie-lab-booking');
+			}
+			if ($frequency === self::BOOKING_FREQUENCY_WEEKLY_REPEAT || $frequency === self::BOOKING_FREQUENCY_BIWEEKLY_REPEAT) {
+				$step_days = $frequency === self::BOOKING_FREQUENCY_BIWEEKLY_REPEAT ? 14 : 7;
+				for ($i = 0; $i < $weeks; $i++) {
+					$expanded_dates = array_merge($expanded_dates, self::shift_dates_by_days($base_dates, $i * $step_days));
+				}
+			} else {
+				$expanded_dates = $base_dates;
+			}
+		}
+
+		$expanded_dates = self::normalize_date_list($expanded_dates);
+		if (!$expanded_dates) {
+			return [];
+		}
+
+		$occurrences = $mode === self::BOOKING_MODE_FULL_DAY
+			? array_map(
+				static function (string $date): array {
+					return ['date' => $date, 'start' => '', 'end' => '', 'full_day' => true];
+				},
+				$expanded_dates
+			)
+			: self::build_time_occurrences($expanded_dates, $time_slots);
 
 		$occurrences = self::normalize_occurrences($occurrences);
 		if (count($occurrences) > 180) {
@@ -777,6 +809,42 @@ final class Bookings {
 		}
 
 		return $occurrences;
+	}
+
+	/**
+	 * @param array<int,string> $dates
+	 */
+	private static function dates_are_same_week(array $dates): bool {
+		$dates = self::normalize_date_list($dates);
+		if (!$dates) {
+			return false;
+		}
+		$first_week = self::week_start_for_date((string) $dates[0]);
+		foreach ($dates as $date) {
+			if (self::week_start_for_date((string) $date) !== $first_week) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static function week_start_for_date(string $date): string {
+		$ts = strtotime($date . ' 00:00:00');
+		$weekday = (int) gmdate('N', $ts); // 1..7
+		$monday_ts = strtotime('-' . ($weekday - 1) . ' day', $ts);
+		return gmdate('Y-m-d', $monday_ts);
+	}
+
+	/**
+	 * @param array<int,string> $dates
+	 * @return array<int,string>
+	 */
+	private static function shift_dates_by_days(array $dates, int $days): array {
+		$out = [];
+		foreach ($dates as $date) {
+			$out[] = gmdate('Y-m-d', strtotime(($days >= 0 ? '+' : '') . $days . ' day', strtotime((string) $date . ' 00:00:00')));
+		}
+		return $out;
 	}
 
 	/**
