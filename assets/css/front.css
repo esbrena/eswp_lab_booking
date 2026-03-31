@@ -766,6 +766,12 @@ label.cie-slot-chip {
   border-color: #fb7185;
 }
 
+.cie-slot-chip.is-expired {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
 .cie-slot-chip.is-selected {
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
 }
@@ -938,6 +944,11 @@ select {
   background: #eff6ff;
   border-color: #3b82f6;
   color: #1e3a8a;
+}
+
+.cie-scheduler__event-chip.is-past {
+  opacity: 0.5;
+  filter: saturate(0.6);
 }
 
 .cie-scheduler__event-chip.is-rejected,

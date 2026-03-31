@@ -393,11 +393,11 @@ final class Shortcodes {
 									<div class="cie-inline-fields">
 										<label data-cie-hide-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 											<?php echo esc_html__('Fecha de inicio', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
+											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
 										</label>
 										<label data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
 											<?php echo esc_html__('Fecha de fin', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
+											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
 										</label>
 									</div>
 									<p class="cie-cal-muted" data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
@@ -414,7 +414,7 @@ final class Shortcodes {
 									<p data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 										<label>
 											<?php echo esc_html__('Elige días', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" />
+											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
 										</label>
 									</p>
 

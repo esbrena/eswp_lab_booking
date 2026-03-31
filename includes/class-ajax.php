@@ -217,6 +217,7 @@ final class Ajax {
 			}
 		}
 
+		$today = gmdate('Y-m-d');
 		$events = [];
 		foreach ($bookings as $booking) {
 			$booking_id = (int) $booking->ID;
@@ -233,11 +234,13 @@ final class Ajax {
 
 			foreach ($occurrences as $index => $occ) {
 				$full_day = !empty($occ['full_day']);
+				$occ_date = (string) ($occ['date'] ?? '');
+				$is_past = ($occ_date !== '' && $occ_date < $today);
 				$events[] = [
 					'id' => 'booking-' . $booking_id . '-' . $index,
 					'type' => 'booking',
 					'bookingId' => $booking_id,
-					'date' => (string) $occ['date'],
+					'date' => $occ_date,
 					'start' => $full_day ? '' : (string) ($occ['start'] ?? ''),
 					'end' => $full_day ? '' : (string) ($occ['end'] ?? ''),
 					'fullDay' => $full_day,
@@ -246,6 +249,7 @@ final class Ajax {
 					'resourceType' => $booking_type,
 					'status' => $status,
 					'statusSlug' => self::status_slug($status),
+					'isPast' => $is_past,
 					'user' => $is_admin && $user ? (string) $user->display_name : '',
 					'detailUrl' => $is_admin ? admin_url('admin.php?page=cie-lab-booking-booking&booking_id=' . $booking_id) : null,
 				];
@@ -279,6 +283,7 @@ final class Ajax {
 					'resources' => $resource_names,
 					'status' => 'blocked',
 					'statusSlug' => 'blocked',
+					'isPast' => ($day < gmdate('Y-m-d')),
 					'user' => '',
 					'detailUrl' => $is_admin ? get_edit_post_link($block_id, '') : null,
 				];

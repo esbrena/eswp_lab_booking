@@ -165,6 +165,22 @@
     return String(h).padStart(2, '0') + ':00';
   }
 
+  function currentDateYmd() {
+    return toYmd(new Date());
+  }
+
+  function currentHourStartMinutes() {
+    var now = new Date();
+    return now.getHours() * 60;
+  }
+
+  function isPastHourlySlot(dateYmd, slotStartHm) {
+    if (String(dateYmd || '') !== currentDateYmd()) return false;
+    var slotStart = timeToMinutes(slotStartHm);
+    if (slotStart < 0) return false;
+    return slotStart < currentHourStartMinutes();
+  }
+
   function statusSlug(status) {
     var map = {
       pending: 'pending',
@@ -451,6 +467,7 @@
       if (!window.flatpickr) return;
       window.flatpickr(this, {
         dateFormat: 'Y-m-d',
+        minDate: 'today',
         locale: locale,
         disableMobile: true,
         altInput: true,
@@ -465,6 +482,7 @@
         mode: 'multiple',
         conjunction: ', ',
         dateFormat: 'Y-m-d',
+        minDate: 'today',
         locale: locale,
         disableMobile: true,
         altInput: true,
@@ -677,15 +695,65 @@
     }
 
     var slotsXhr = null;
+    function baseHourSlots() {
+      var slots = [];
+      for (var m = 8 * 60; m < 20 * 60; m += 60) {
+        var start = String(Math.floor(m / 60)).padStart(2, '0') + ':00';
+        var endMinutes = m + 60;
+        var end = String(Math.floor(endMinutes / 60)).padStart(2, '0') + ':00';
+        slots.push({
+          start: start,
+          end: end,
+          available: false
+        });
+      }
+      return slots;
+    }
+
+    function renderSlotSelector(date, slots, extraMessage) {
+      var $box = $flow.find('[data-cie-slot-availability]');
+      var $selector = $flow.find('[data-cie-slot-selector]');
+      var selected = {};
+      selectedTimeSlots().forEach(function (slot) {
+        selected[slot] = true;
+      });
+      var html = '<strong>Bloques para ' + escapeHtml(formatLongDate(date)) + '</strong><div class="cie-slot-grid">';
+      var selectorHtml = '';
+      slots.forEach(function (slot) {
+        var slotKey = String(slot.start + '-' + slot.end);
+        var elapsed = !!slot.elapsed || isPastHourlySlot(date, String(slot.start || ''));
+        var enabled = !!slot.available && !elapsed;
+        var selectedAttr = enabled && selected[slotKey] ? ' checked' : '';
+        var disabledAttr = enabled ? '' : ' disabled';
+        var selectedClass = enabled && selected[slotKey] ? ' is-selected' : '';
+        var stateClass = enabled ? 'is-available' : 'is-unavailable';
+        html += '<span class="cie-slot-chip ' + stateClass + selectedClass + '">' + escapeHtml(slot.start + ' - ' + slot.end) + '</span>';
+        selectorHtml += '<label class="cie-slot-chip ' + stateClass + selectedClass + '">';
+        selectorHtml += '<input type="checkbox" name="booking_time_slots[]" value="' + escapeHtml(slotKey) + '"' + selectedAttr + disabledAttr + ' />';
+        selectorHtml += escapeHtml(slot.start + ' - ' + slot.end) + '</label>';
+      });
+      html += '</div>';
+      if (extraMessage) {
+        html += '<div class="cie-cal-muted" style="margin-top:6px;">' + escapeHtml(extraMessage) + '</div>';
+      }
+      $box.html(html).show();
+      $selector.html(selectorHtml).show();
+    }
+
     function updateSlotsAvailability() {
       var mode = selectedMode();
       var resources = selectedResources();
       var date = selectedPrimaryDate();
       var $box = $flow.find('[data-cie-slot-availability]');
       var $selector = $flow.find('[data-cie-slot-selector]');
-      if (mode !== 'time_range' || !date || (!resources.spaces.length && !resources.equipment.length)) {
+      if (mode !== 'time_range' || !date) {
         $box.hide().empty();
         $selector.hide();
+        return;
+      }
+      if (!resources.spaces.length && !resources.equipment.length) {
+        renderSlotSelector(date, baseHourSlots(), 'Seleccione al menos un espacio o equipo para activar los slots disponibles.');
+        updateScheduleNotice();
         return;
       }
       if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) return;
@@ -707,21 +775,7 @@
         selectedTimeSlots().forEach(function (slot) {
           selected[slot] = true;
         });
-        var html = '<strong>Bloques para ' + escapeHtml(formatLongDate(date)) + '</strong><div class="cie-slot-grid">';
-        var selectorHtml = '';
-        response.data.slots.forEach(function (slot) {
-          var slotKey = String(slot.start + '-' + slot.end);
-          var selectedAttr = slot.available && selected[slotKey] ? ' checked' : '';
-          var disabledAttr = slot.available ? '' : ' disabled';
-          var selectedClass = slot.available && selected[slotKey] ? ' is-selected' : '';
-          html += '<span class="cie-slot-chip ' + (slot.available ? 'is-available' : 'is-unavailable') + selectedClass + '">' + escapeHtml(slot.start + ' - ' + slot.end) + '</span>';
-          selectorHtml += '<label class="cie-slot-chip ' + (slot.available ? 'is-available' : 'is-unavailable') + selectedClass + '">';
-          selectorHtml += '<input type="checkbox" name="booking_time_slots[]" value="' + escapeHtml(slotKey) + '"' + selectedAttr + disabledAttr + ' />';
-          selectorHtml += escapeHtml(slot.start + ' - ' + slot.end) + '</label>';
-        });
-        html += '</div>';
-        $box.html(html).show();
-        $selector.html(selectorHtml).show();
+        renderSlotSelector(date, response.data.slots);
         updateScheduleNotice();
         updateContinueState();
         updateFormAvailability();
@@ -920,6 +974,8 @@
     var classes = [
       'cie-scheduler__event-chip',
       event.type === 'block' ? 'is-block' : 'is-booking',
+      'is-' + statusSlug(event.status || ''),
+      event.isPast ? 'is-past' : '',
       resourceTypeClass(event.resourceType || '')
     ].join(' ');
     var label = (withTime && event.start ? event.start + ' ' : '') + (event.title || 'Reserva');
