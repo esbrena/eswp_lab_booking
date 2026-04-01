@@ -240,14 +240,14 @@ final class Shortcodes {
 					<?php
 					echo $is_edit_mode
 						? esc_html__('Editar reserva', 'cie-lab-booking')
-						: esc_html__('Reserva de equipos / espacios', 'cie-lab-booking');
+						: esc_html__('', 'cie-lab-booking');
 					?>
 				</h3>
 				<p>
 					<?php
 					echo $is_edit_mode
 						? esc_html__('Revise y actualice los datos de su reserva. Cuando termine, envíe los cambios para que puedan validarse de nuevo.', 'cie-lab-booking')
-						: esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking');
+						: esc_html__('', 'cie-lab-booking');
 					?>
 				</p>
 				<?php if ($is_edit_mode): ?>
@@ -314,8 +314,8 @@ final class Shortcodes {
 
 						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2" data-cie-max-weeks="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" data-cie-max-range-days="<?php echo esc_attr((string) $max_range_days); ?>">
 							<div data-cie-phase="planning">
-								<fieldset class="cie-step-card">
-									<legend><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></legend>
+								<fieldset class="cie-step-card first-card">
+									<hp><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
 									<div class="cie-installation-picker">
 										<label class="cie-installation-card" data-cie-installation-card="space">
 											<input type="radio" name="booking_installation_type" value="space" <?php checked($installation_type === 'space'); ?> />
@@ -480,8 +480,6 @@ final class Shortcodes {
 										</label>
 									</div>
 									-->
-
-									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
 									<div class="cie-slot-availability" data-cie-slot-availability style="display:none"></div>
 									<div class="cie-slot-selector" data-cie-slot-selector data-cie-only-mode="<?php echo esc_attr(Bookings::BOOKING_MODE_TIME_RANGE); ?>">
 										<?php foreach ($booking_time_slots as $slot): ?>
@@ -535,7 +533,10 @@ final class Shortcodes {
 										</label>
 									</p>
 								</fieldset>
-
+								<div class="resumen-reserva">
+									<small>RESUMEN DE LA RESERVA</small>
+									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
+								</div>
 								<p class="cie-lab-booking__submit">
 									<button type="submit" class="cie-btn cie-btn--primary">
 										<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
@@ -546,10 +547,6 @@ final class Shortcodes {
 					</div>
 
 					<aside class="cie-booking-layout__calendar">
-						<div class="cie-step-card">
-							<h4><?php echo esc_html__('Pendientes de validar', 'cie-lab-booking'); ?></h4>
-							<?php echo self::render_booking_list(is_array($pending_user_bookings) ? $pending_user_bookings : [], (string) ($atts['my_bookings_url'] ?? ''), true); ?>
-						</div>
 						<div class="cie-scheduler" data-cie-scheduler="1" data-cie-calendar-scope="general" data-cie-default-view="week" data-cie-form-linked-scheduler="1"></div>
 						<!--<div class="cie-form-availability" data-cie-form-availability="1"></div>-->
 					</aside>
