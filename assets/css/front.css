@@ -268,13 +268,6 @@
   padding: 4px 9px;
 }
 
-.cie-step-card {
-  border: 1px solid #dbe3ef;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px;
-}
-
 .cie-step-card legend {
   font-weight: 800;
   color: #0f172a;
@@ -742,6 +735,7 @@ color:black !important;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  display:none;
 }
 
 label.cie-slot-chip {
@@ -761,9 +755,15 @@ label.cie-slot-chip {
 }
 
 .cie-slot-chip.is-unavailable {
-  background: #fff1f2;
-  color: #9f1239;
-  border-color: #fb7185;
+  background: #f8fafc;
+    color: #64748b;
+    border-color: #dbe3ee;
+}
+
+.cie-slot-chip.is-expired {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #cbd5e1;
 }
 
 .cie-slot-chip.is-selected {
@@ -888,6 +888,11 @@ select {
   gap: 5px;
 }
 
+.cie-scheduler__day.is-today {
+  border-color: #0ea5e9;
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.4);
+}
+
 .cie-scheduler__day.is-muted {
   opacity: 0.55;
 }
@@ -905,7 +910,6 @@ select {
 
 .cie-scheduler__event-chip {
   display: inline-block;
-  border-radius: 999px;
   padding: 3px 8px;
   font-size: 11px;
   font-weight: 700;
@@ -917,6 +921,7 @@ select {
   text-overflow: ellipsis;
 }
 
+/*
 .cie-scheduler__event-chip.is-approved {
   background: #f0fdf4;
   border-color: #22c55e;
@@ -934,6 +939,11 @@ select {
   border-color: #3b82f6;
   color: #1e3a8a;
 }
+*/
+
+.cie-scheduler__event-chip.is-past {
+  opacity: 0.6;
+}
 
 .cie-scheduler__event-chip.is-rejected,
 .cie-scheduler__event-chip.is-cancelled,
@@ -945,25 +955,37 @@ select {
 
 .cie-scheduler__event-chip.is-booking.is-resource-combined {
   background: #ecfdf5;
-  border-color: #16a34a;
+  border-left:2px solid #16a34a;
   color: #14532d;
 }
 
 .cie-scheduler__event-chip.is-booking.is-resource-equipment {
   background: #eff6ff;
-  border-color: #2563eb;
+  border-left: 2px solid #2563eb;
   color: #1e3a8a;
 }
 
 .cie-scheduler__event-chip.is-booking.is-resource-space {
   background: #fff7ed;
-  border-color: #f97316;
+  border-left: 2px solid #f97316;
   color: #9a3412;
 }
 
 .cie-scheduler__event-more {
   font-size: 11px;
   color: #475569;
+}
+
+.cie-scheduler__event-more-link {
+  display: inline-block;
+  border: 1px solid #cbd5e1;
+  background: #e2e8f0;
+  color: #334155;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .cie-scheduler__time-grid {
@@ -1002,6 +1024,26 @@ select {
     gap: 4px;
     flex-direction: column;
     justify-content: flex-end;
+}
+
+.cie-scheduler__time-cell.is-today {
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+.cie-scheduler__time-cell.is-current-time {
+  position: relative;
+}
+
+.cie-scheduler__time-cell.is-current-time::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  border-top: 2px solid #ef4444;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .cie-day-timeline {
@@ -1057,6 +1099,11 @@ select {
   text-align: center;
 }
 
+.day-header.is-today .weekday,
+.day-header.is-today .day-number {
+  color: #0369a1;
+}
+
 .weekday {
   font-size: 0.7em; /* small */
   font-weight: 600;
@@ -1066,3 +1113,29 @@ select {
   font-size: 1.4em;
   font-weight: bold;
 }
+
+.resumen-reserva {
+  font-size: 12px;
+  color:black;
+  font-weight:bold;
+  margin-bottom:32px;
+  margin-top:32px;
+  border-top:1px solid lightgray;
+  padding-top:16px;
+}
+.first-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  border-top: 8px solid #cc1818;
+  border-radius: 0px 0px 16px 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 12px;
+}
+
+.first-card .cie-step-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 12px;
+}
+

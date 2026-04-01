@@ -130,6 +130,8 @@ final class Admin {
 			check_admin_referer('cie_lab_booking_save_settings', '_wpnonce_cie_lab_booking_settings');
 
 			$email = trim((string) ($_POST['cie_lab_booking_notification_email'] ?? ''));
+			$max_weeks = max(1, min(5, (int) ($_POST['cie_lab_booking_max_recurrence_weeks'] ?? Bookings::get_max_recurrence_weeks())));
+			$max_range_days = max(1, min(5, (int) ($_POST['cie_lab_booking_max_range_days'] ?? Bookings::get_max_range_days())));
 			if ($email !== '' && !is_email($email)) {
 				Util::admin_notice(__('El correo de notificación no es válido.', 'cie-lab-booking'), 'error');
 			} else {
@@ -138,12 +140,16 @@ final class Admin {
 				} else {
 					update_option(Mailer::OPTION_NOTIFICATION_EMAIL, $email, false);
 				}
+				update_option(Bookings::OPTION_MAX_RECURRING_WEEKS, $max_weeks, false);
+				update_option(Bookings::OPTION_MAX_RANGE_DAYS, $max_range_days, false);
 				Util::admin_notice(__('Ajustes guardados.', 'cie-lab-booking'), 'success');
 			}
 		}
 
 		$current_email = trim((string) get_option(Mailer::OPTION_NOTIFICATION_EMAIL, ''));
 		$default_admin_email = trim((string) get_option('admin_email', ''));
+		$current_max_weeks = Bookings::get_max_recurrence_weeks();
+		$current_max_range_days = Bookings::get_max_range_days();
 
 		echo '<div class="wrap"><h1>' . esc_html__('Ajustes de reservas', 'cie-lab-booking') . '</h1>';
 		echo '<p>' . esc_html__('Configura las notificaciones del sistema de reservas.', 'cie-lab-booking') . '</p>';
@@ -161,6 +167,18 @@ final class Admin {
 			'<input type="email" name="cie_lab_booking_notification_email" value="%1$s" placeholder="%2$s" style="width:100%%" />',
 			esc_attr($current_email),
 			esc_attr($default_admin_email)
+		);
+		echo '</label></p>';
+		echo '<p><label><strong>' . esc_html__('Máximo de semanas para repetición', 'cie-lab-booking') . '</strong><br/>';
+		printf(
+			'<input type="number" min="1" max="5" step="1" name="cie_lab_booking_max_recurrence_weeks" value="%d" style="width:120px" />',
+			(int) $current_max_weeks
+		);
+		echo '</label></p>';
+		echo '<p><label><strong>' . esc_html__('Máximo de días para rango', 'cie-lab-booking') . '</strong><br/>';
+		printf(
+			'<input type="number" min="1" max="5" step="1" name="cie_lab_booking_max_range_days" value="%d" style="width:120px" />',
+			(int) $current_max_range_days
 		);
 		echo '</label></p>';
 		echo '<p><button class="button button-primary">' . esc_html__('Guardar', 'cie-lab-booking') . '</button></p>';
@@ -223,39 +241,6 @@ final class Admin {
 	public static function render_calendar(): void {
 		if (!current_user_can('manage_options')) {
 			wp_die(esc_html__('No tienes permisos.', 'cie-lab-booking'), 403);
-		}
-
-		// Quick-create maintenance block.
-		if (!empty($_POST['cie_block_submit'])) {
-			check_admin_referer('cie_block_submit', '_wpnonce_cie_block');
-
-			$start = Util::normalize_date_ymd((string) ($_POST['block_start_date'] ?? ''));
-			$end = Util::normalize_date_ymd((string) ($_POST['block_end_date'] ?? ''));
-			$reason = sanitize_text_field((string) ($_POST['block_reason'] ?? ''));
-			$block_all = !empty($_POST['block_all_resources']);
-			$resource_ids = $block_all
-				? []
-				: array_values(array_filter(array_map('intval', (array) ($_POST['block_resource_ids'] ?? []))));
-
-			if (!$start || !$end || $end < $start) {
-				Util::admin_notice(__('Fechas de bloqueo inválidas.', 'cie-lab-booking'), 'error');
-			} else {
-				$block_id = wp_insert_post([
-					'post_type' => Post_Types::CPT_BLOCK,
-					'post_status' => 'publish',
-					'post_title' => sprintf(__('Bloqueo %s - %s', 'cie-lab-booking'), $start, $end),
-				]);
-
-				if ($block_id && !is_wp_error($block_id)) {
-					update_post_meta($block_id, '_cie_block_start_date', $start);
-					update_post_meta($block_id, '_cie_block_end_date', $end);
-					update_post_meta($block_id, '_cie_block_reason', $reason);
-					update_post_meta($block_id, '_cie_block_resource_ids', $resource_ids);
-					Util::admin_notice(__('Bloqueo creado.', 'cie-lab-booking'), 'success');
-				} else {
-					Util::admin_notice(__('No se pudo crear el bloqueo.', 'cie-lab-booking'), 'error');
-				}
-			}
 		}
 
 		$booking_status_filter = isset($_GET['booking_status']) ? sanitize_key((string) $_GET['booking_status']) : '';
@@ -340,40 +325,6 @@ final class Admin {
 		}
 		echo '</section>';
 
-		// Quick block form.
-		$resources = get_posts([
-			'post_type' => Post_Types::CPT_RESOURCE,
-			'post_status' => 'publish',
-			'posts_per_page' => -1,
-			'orderby' => 'title',
-			'order' => 'ASC',
-		]);
-		echo '<section class="cie-admin-panel">';
-		echo '<h2>' . esc_html__('Crear bloqueo por mantenimiento', 'cie-lab-booking') . '</h2>';
-		echo '<form method="post">';
-		wp_nonce_field('cie_block_submit', '_wpnonce_cie_block');
-		echo '<input type="hidden" name="cie_block_submit" value="1" />';
-		echo '<p><label>' . esc_html__('Desde', 'cie-lab-booking') . ' <input class="cie-date" type="text" name="block_start_date" placeholder="YYYY-MM-DD" required /></label></p>';
-		echo '<p><label>' . esc_html__('Hasta', 'cie-lab-booking') . ' <input class="cie-date" type="text" name="block_end_date" placeholder="YYYY-MM-DD" required /></label></p>';
-		echo '<p><label>' . esc_html__('Motivo', 'cie-lab-booking') . '<br/><input type="text" name="block_reason" style="width:420px" /></label></p>';
-		echo '<label class="cie-admin-toggle">';
-		echo '<input type="checkbox" name="block_all_resources" value="1" data-cie-all-toggle="1" /> ';
-		echo esc_html__('Bloquear todos los recursos', 'cie-lab-booking');
-		echo '</label>';
-		echo '<div class="cie-admin-resource-picker" data-cie-resource-picker="1">';
-		echo '<p><strong>' . esc_html__('Selección manual de recursos', 'cie-lab-booking') . '</strong></p>';
-		foreach ($resources as $r) {
-			printf(
-				'<label><input type="checkbox" name="block_resource_ids[]" value="%1$d" /> %2$s <small>(%3$s)</small></label>',
-				(int) $r->ID,
-				esc_html($r->post_title),
-				esc_html(self::resource_kind_label((string) get_post_meta((int) $r->ID, '_cie_resource_kind', true)))
-			);
-		}
-		echo '</div>';
-		echo '<p><button class="button button-primary">' . esc_html__('Crear bloqueo', 'cie-lab-booking') . '</button></p>';
-		echo '</form>';
-		echo '</section>';
 		echo '</aside>';
 		echo '</div>';
 

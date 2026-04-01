@@ -47,6 +47,15 @@
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
+  function isPastDate(ymd) {
+    var d = parseYmd(ymd);
+    if (!d) return false;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  }
+
   function timeToMinutes(value) {
     if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return -1;
     var parts = String(value).split(':');
@@ -92,6 +101,7 @@
   function setupDatePickers() {
     if (!window.flatpickr) return;
     var locale = (window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : 'default';
+    var todayYmd = toYmd(new Date());
     $('input.cie-date').each(function () {
       window.flatpickr(this, {
         dateFormat: 'Y-m-d',
@@ -99,7 +109,8 @@
         disableMobile: true,
         altInput: true,
         altFormat: 'd/m/Y',
-        allowInput: true
+        allowInput: true,
+        minDate: todayYmd
       });
     });
   }
@@ -340,7 +351,18 @@
   }
 
   function renderEventChip(event, withTime) {
-    var classes = ['cie-scheduler__event-chip', event.type === 'block' ? 'is-block' : 'is-booking', resourceTypeClass(event.resourceType || '')].join(' ');
+    var classes = [
+      'cie-scheduler__event-chip',
+      event.type === 'block' ? 'is-block' : 'is-booking',
+      resourceTypeClass(event.resourceType || '')
+    ];
+    if (event.type === 'booking' && event.statusSlug) {
+      classes.push('is-' + String(event.statusSlug));
+    }
+    if (event.isPast) {
+      classes.push('is-past');
+    }
+    classes = classes.join(' ');
     var label = (withTime && event.start ? event.start + ' ' : '') + (event.title || 'Reserva');
     var attrs = '';
     if (event.type === 'booking' && event.bookingId) attrs = ' data-cie-booking-id="' + event.bookingId + '" role="button" tabindex="0"';
@@ -446,13 +468,16 @@
       var first = monthStart(state.current);
       var gridStart = startOfWeek(first);
       var byDate = eventsByDate();
+      var todayYmd = toYmd(new Date());
       var html = '<div class="cie-scheduler__month"><div class="cie-scheduler__week-header"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div><div class="cie-scheduler__month-grid">';
       for (var i = 0; i < 42; i++) {
         var day = addDays(gridStart, i);
         var ymd = toYmd(day);
         var events = byDate[ymd] || [];
-        var muted = day.getMonth() === first.getMonth() ? '' : ' is-muted';
-        html += '<div class="cie-scheduler__day' + muted + '" data-cie-open-day="' + ymd + '"><span class="cie-scheduler__day-number">' + day.getDate() + '</span>';
+        var dayClasses = ['cie-scheduler__day'];
+        if (day.getMonth() !== first.getMonth()) dayClasses.push('is-muted');
+        if (ymd === todayYmd) dayClasses.push('is-today');
+        html += '<div class="' + dayClasses.join(' ') + '" data-cie-open-day="' + ymd + '"><span class="cie-scheduler__day-number">' + day.getDate() + '</span>';
         events.slice(0, 2).forEach(function (event) {
           html += renderEventChip(event, false);
         });
@@ -467,18 +492,25 @@
       var days = state.view === 'week' ? 7 : 1;
       var rowStyle = ' style="grid-template-columns:76px repeat(' + days + ', minmax(0, 1fr));"';
       var byDate = eventsByDate();
+      var now = new Date();
+      var todayYmd = toYmd(now);
+      var nowMinutes = (now.getHours() * 60) + now.getMinutes();
       var html = '<div class="cie-scheduler__time-grid"><div class="cie-scheduler__time-header"' + rowStyle + '><span></span>';
       for (var d = 0; d < days; d++) {
         var day = addDays(start, d);
         var ymd = toYmd(day);
-        html += '<button type="button" class="cie-scheduler__time-day" data-cie-open-day="' + ymd + '">' + escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
+        var dayBtnClasses = ['cie-scheduler__time-day'];
+        if (ymd === todayYmd) dayBtnClasses.push('is-today');
+        html += '<button type="button" class="' + dayBtnClasses.join(' ') + '" data-cie-open-day="' + ymd + '">' + escapeHtml(day.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })) + '</button>';
       }
       html += '</div>';
       html += '<div class="cie-scheduler__all-day-row"' + rowStyle + '><div class="cie-scheduler__time-label">Todo el día</div>';
       for (var a = 0; a < days; a++) {
         var allDay = toYmd(addDays(start, a));
         var allDayEvents = (byDate[allDay] || []).filter(function (event) { return !!event.fullDay; });
-        html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + allDay + '">';
+        var allDayClasses = ['cie-scheduler__time-cell'];
+        if (allDay === todayYmd) allDayClasses.push('is-today');
+        html += '<div class="' + allDayClasses.join(' ') + '" data-cie-open-day="' + allDay + '">';
         allDayEvents.forEach(function (event) { html += renderEventChip(event, false); });
         html += '</div>';
       }
@@ -494,7 +526,14 @@
             var evStart = timeToMinutes(event.start || '');
             return evStart >= rowStart && evStart < rowEnd;
           });
-          html += '<div class="cie-scheduler__time-cell" data-cie-open-day="' + date + '">';
+          var cellClasses = ['cie-scheduler__time-cell'];
+          if (date === todayYmd) {
+            cellClasses.push('is-today');
+            if (nowMinutes >= rowStart && nowMinutes < rowEnd) {
+              cellClasses.push('is-current-time');
+            }
+          }
+          html += '<div class="' + cellClasses.join(' ') + '" data-cie-open-day="' + date + '">';
           cellEvents.forEach(function (event) { html += renderEventChip(event, true); });
           html += '</div>';
         }

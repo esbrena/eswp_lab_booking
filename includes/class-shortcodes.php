@@ -126,21 +126,23 @@ final class Shortcodes {
 		if (!in_array($booking_mode, [Bookings::BOOKING_MODE_FULL_DAY, Bookings::BOOKING_MODE_TIME_RANGE], true)) {
 			$booking_mode = Bookings::BOOKING_MODE_FULL_DAY;
 		}
+		$max_recurrence_weeks = Bookings::get_max_recurrence_weeks();
+		$max_range_days = Bookings::get_max_range_days();
 		$booking_frequency = sanitize_key((string) ($_POST['booking_frequency'] ?? ''));
-		if (!in_array($booking_frequency, [Bookings::BOOKING_FREQUENCY_SINGLE, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
+		if (!in_array($booking_frequency, [Bookings::BOOKING_FREQUENCY_SINGLE, Bookings::BOOKING_FREQUENCY_DAILY, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
 			$booking_frequency = Bookings::BOOKING_FREQUENCY_SINGLE;
 		}
 		$booking_time_start = trim((string) ($_POST['booking_time_start'] ?? Bookings::BOOKING_TIME_MIN));
 		$booking_time_end = trim((string) ($_POST['booking_time_end'] ?? '09:00'));
 		$booking_time_slots = array_values(array_filter(array_map('sanitize_text_field', (array) ($_POST['booking_time_slots'] ?? []))));
 		$booking_day_scope = sanitize_key((string) ($_POST['booking_day_scope'] ?? Bookings::BOOKING_DAY_SCOPE_SINGLE));
-		if (!in_array($booking_day_scope, [Bookings::BOOKING_DAY_SCOPE_SINGLE, Bookings::BOOKING_DAY_SCOPE_RANGE], true)) {
+		if (!in_array($booking_day_scope, [Bookings::BOOKING_DAY_SCOPE_SINGLE, Bookings::BOOKING_DAY_SCOPE_RANGE, Bookings::BOOKING_DAY_SCOPE_LOOSE], true)) {
 			$booking_day_scope = Bookings::BOOKING_DAY_SCOPE_SINGLE;
 		}
 		if ($booking_day_scope === Bookings::BOOKING_DAY_SCOPE_SINGLE && $posted_start !== '' && $posted_end !== '' && $posted_end > $posted_start) {
 			$booking_day_scope = Bookings::BOOKING_DAY_SCOPE_RANGE;
 		}
-		$booking_recurrence_weeks = max(1, min(52, (int) ($_POST['booking_recurrence_weeks'] ?? 1)));
+		$booking_recurrence_weeks = max(1, min($max_recurrence_weeks, (int) ($_POST['booking_recurrence_weeks'] ?? 1)));
 		$booking_weekdays = array_values(array_filter(array_map('intval', (array) ($_POST['booking_weekdays'] ?? []))));
 		$booking_dates_raw = trim((string) ($_POST['booking_dates_raw'] ?? ''));
 		$installation_type = sanitize_key((string) ($_POST['booking_installation_type'] ?? ''));
@@ -172,7 +174,7 @@ final class Shortcodes {
 			if (in_array($booking_mode_meta, [Bookings::BOOKING_MODE_FULL_DAY, Bookings::BOOKING_MODE_TIME_RANGE], true)) {
 				$booking_mode = $booking_mode_meta;
 			}
-			if (in_array($booking_frequency_meta, [Bookings::BOOKING_FREQUENCY_SINGLE, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
+			if (in_array($booking_frequency_meta, [Bookings::BOOKING_FREQUENCY_SINGLE, Bookings::BOOKING_FREQUENCY_DAILY, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT, Bookings::BOOKING_FREQUENCY_MANUAL_DATES], true)) {
 				$booking_frequency = $booking_frequency_meta;
 			}
 			if ($booking_time_start_meta !== '') {
@@ -184,11 +186,11 @@ final class Shortcodes {
 			if ($booking_time_slots_meta) {
 				$booking_time_slots = $booking_time_slots_meta;
 			}
-			if (in_array($booking_day_scope_meta, [Bookings::BOOKING_DAY_SCOPE_SINGLE, Bookings::BOOKING_DAY_SCOPE_RANGE], true)) {
+			if (in_array($booking_day_scope_meta, [Bookings::BOOKING_DAY_SCOPE_SINGLE, Bookings::BOOKING_DAY_SCOPE_RANGE, Bookings::BOOKING_DAY_SCOPE_LOOSE], true)) {
 				$booking_day_scope = $booking_day_scope_meta;
 			}
 			if ($booking_recurrence_weeks_meta > 0) {
-				$booking_recurrence_weeks = max(1, min(52, $booking_recurrence_weeks_meta));
+				$booking_recurrence_weeks = max(1, min($max_recurrence_weeks, $booking_recurrence_weeks_meta));
 			}
 			if ($booking_weekdays_meta) {
 				$booking_weekdays = $booking_weekdays_meta;
@@ -200,6 +202,21 @@ final class Shortcodes {
 
 		$effective_has_space = $installation_type === 'space' || $installation_type === 'combined';
 		$effective_has_equipment = $installation_type === 'equipment' || $installation_type === 'combined';
+		$pending_user_bookings = get_posts([
+			'post_type' => Post_Types::CPT_BOOKING,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'author' => $user_id,
+			'meta_query' => [
+				[
+					'key' => '_cie_booking_status',
+					'value' => [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES],
+					'compare' => 'IN',
+				],
+			],
+		]);
 
 		ob_start();
 		?>
@@ -223,14 +240,14 @@ final class Shortcodes {
 					<?php
 					echo $is_edit_mode
 						? esc_html__('Editar reserva', 'cie-lab-booking')
-						: esc_html__('Reserva de equipos / espacios', 'cie-lab-booking');
+						: esc_html__('', 'cie-lab-booking');
 					?>
 				</h3>
 				<p>
 					<?php
 					echo $is_edit_mode
 						? esc_html__('Revise y actualice los datos de su reserva. Cuando termine, envíe los cambios para que puedan validarse de nuevo.', 'cie-lab-booking')
-						: esc_html__('Complete el siguiente formulario para reservar equipos / espacios del Laboratorio de Lingüística Experimental del Centro Internacional del Español.', 'cie-lab-booking');
+						: esc_html__('', 'cie-lab-booking');
 					?>
 				</p>
 				<?php if ($is_edit_mode): ?>
@@ -295,10 +312,10 @@ final class Shortcodes {
 			<!-- END BOOKING HEADER -->
 
 
-						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2">
+						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2" data-cie-max-weeks="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" data-cie-max-range-days="<?php echo esc_attr((string) $max_range_days); ?>">
 							<div data-cie-phase="planning">
-								<fieldset class="cie-step-card">
-									<legend><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></legend>
+								<fieldset class="cie-step-card first-card">
+									<hp><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
 									<div class="cie-installation-picker">
 										<label class="cie-installation-card" data-cie-installation-card="space">
 											<input type="radio" name="booking_installation_type" value="space" <?php checked($installation_type === 'space'); ?> />
@@ -367,18 +384,39 @@ final class Shortcodes {
 											<input type="radio" name="booking_day_scope" value="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>" <?php checked($booking_day_scope === Bookings::BOOKING_DAY_SCOPE_RANGE); ?> />
 											<?php echo esc_html__('Rango de días', 'cie-lab-booking'); ?>
 										</label>
+										<label class="cie-option">
+											<input type="radio" name="booking_day_scope" value="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>" <?php checked($booking_day_scope === Bookings::BOOKING_DAY_SCOPE_LOOSE); ?> />
+											<?php echo esc_html__('Días sueltos', 'cie-lab-booking'); ?>
+										</label>
 									</div>
 
 									<div class="cie-inline-fields">
-										<label>
+										<label data-cie-hide-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 											<?php echo esc_html__('Fecha de inicio', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
+											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
 										</label>
 										<label data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
 											<?php echo esc_html__('Fecha de fin', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
+											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
 										</label>
 									</div>
+									<p class="cie-cal-muted" data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
+										<?php
+										echo esc_html(
+											sprintf(
+												/* translators: %d: max days */
+												__('El rango debe pertenecer a una única semana y no superar %d días.', 'cie-lab-booking'),
+												$max_range_days
+											)
+										);
+										?>
+									</p>
+									<p data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
+										<label>
+											<?php echo esc_html__('Elige días', 'cie-lab-booking'); ?><br/>
+											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+										</label>
+									</p>
 
 									<div class="cie-inline-fields">
 										<label>
@@ -395,51 +433,40 @@ final class Shortcodes {
 										<label>
 											<?php echo esc_html__('Repetición', 'cie-lab-booking'); ?><br/>
 											<select name="booking_frequency">
-												<option value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_SINGLE); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_SINGLE); ?>>
+												<option data-cie-frequency-scope="all" value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_SINGLE); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_SINGLE); ?>>
 													<?php echo esc_html__('Sin repetición', 'cie-lab-booking'); ?>
 												</option>
-												<option value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT); ?>>
-													<?php echo esc_html__('Semanal', 'cie-lab-booking'); ?>
+												<option data-cie-frequency-scope="single_day" value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_DAILY); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_DAILY); ?>>
+													<?php echo esc_html__('Cada día', 'cie-lab-booking'); ?>
 												</option>
-												<option value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_MANUAL_DATES); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_MANUAL_DATES); ?>>
-													<?php echo esc_html__('Fechas sueltas', 'cie-lab-booking'); ?>
+												<option data-cie-frequency-scope="all" value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT); ?>>
+													<?php echo esc_html__('Cada semana', 'cie-lab-booking'); ?>
+												</option>
+												<option data-cie-frequency-scope="all" value="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT); ?>" <?php selected($booking_frequency, Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT); ?>>
+													<?php echo esc_html__('Semana salteada', 'cie-lab-booking'); ?>
 												</option>
 											</select>
 										</label>
 									</div>
 
+									<div class="cie-inline-fields" data-cie-only-frequency="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_DAILY); ?>">
+										<label>
+											<?php echo esc_html__('Número de semanas', 'cie-lab-booking'); ?>
+											<input type="number" min="1" max="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" step="1" name="booking_recurrence_weeks" value="<?php echo esc_attr((string) $booking_recurrence_weeks); ?>" />
+										</label>
+									</div>
 									<div class="cie-inline-fields" data-cie-only-frequency="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT); ?>">
 										<label>
 											<?php echo esc_html__('Número de semanas', 'cie-lab-booking'); ?>
-											<input type="number" min="1" max="52" step="1" name="booking_recurrence_weeks" value="<?php echo esc_attr((string) $booking_recurrence_weeks); ?>" />
+											<input type="number" min="1" max="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" step="1" name="booking_recurrence_weeks" value="<?php echo esc_attr((string) $booking_recurrence_weeks); ?>" />
 										</label>
-										<div class="cie-weekdays-picker">
-											<?php
-											$weekday_labels = [
-												1 => __('Lun', 'cie-lab-booking'),
-												2 => __('Mar', 'cie-lab-booking'),
-												3 => __('Mié', 'cie-lab-booking'),
-												4 => __('Jue', 'cie-lab-booking'),
-												5 => __('Vie', 'cie-lab-booking'),
-												6 => __('Sáb', 'cie-lab-booking'),
-												7 => __('Dom', 'cie-lab-booking'),
-											];
-											foreach ($weekday_labels as $weekday_number => $weekday_label):
-												?>
-												<label class="cie-option">
-													<input type="checkbox" name="booking_weekdays[]" value="<?php echo esc_attr((string) $weekday_number); ?>" <?php checked(in_array($weekday_number, $booking_weekdays, true)); ?> />
-													<?php echo esc_html($weekday_label); ?>
-												</label>
-											<?php endforeach; ?>
-										</div>
 									</div>
-
-									<p data-cie-only-frequency="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_MANUAL_DATES); ?>">
+									<div class="cie-inline-fields" data-cie-only-frequency="<?php echo esc_attr(Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT); ?>">
 										<label>
-											<?php echo esc_html__('Fechas sueltas', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" />
+											<?php echo esc_html__('Número de semanas', 'cie-lab-booking'); ?>
+											<input type="number" min="1" max="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" step="1" name="booking_recurrence_weeks" value="<?php echo esc_attr((string) $booking_recurrence_weeks); ?>" />
 										</label>
-									</p>
+									</div>
 
 									<!-- DE MOMENTO LO OCULTAMOS 
 									<div class="cie-inline-fields" data-cie-only-mode="<?php echo esc_attr(Bookings::BOOKING_MODE_TIME_RANGE); ?>">
@@ -453,8 +480,6 @@ final class Shortcodes {
 										</label>
 									</div>
 									-->
-
-									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
 									<div class="cie-slot-availability" data-cie-slot-availability style="display:none"></div>
 									<div class="cie-slot-selector" data-cie-slot-selector data-cie-only-mode="<?php echo esc_attr(Bookings::BOOKING_MODE_TIME_RANGE); ?>">
 										<?php foreach ($booking_time_slots as $slot): ?>
@@ -508,7 +533,10 @@ final class Shortcodes {
 										</label>
 									</p>
 								</fieldset>
-
+								<div class="resumen-reserva">
+									<small>RESUMEN DE LA RESERVA</small>
+									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
+								</div>
 								<p class="cie-lab-booking__submit">
 									<button type="submit" class="cie-btn cie-btn--primary">
 										<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
