@@ -1123,6 +1123,62 @@ select {
   border-top:1px solid lightgray;
   padding-top:16px;
 }
+
+.cie-booking-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.cie-booking-detail__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-booking-detail__block {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.cie-booking-detail__block-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cie-booking-detail__block-title::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.cie-booking-detail__block-title--clock::before {
+  background: #0ea5e9;
+}
+
+.cie-booking-detail__block-title--list::before {
+  background: #64748b;
+}
+
+.cie-booking-detail__line {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #334155;
+}
+
+.cie-booking-detail__line--total {
+  font-weight: 700;
+  color: #1e3a8a;
+}
 .first-card {
   border: 1px solid #dbe3ef;
   border-radius: 12px;
