@@ -317,7 +317,7 @@ final class Shortcodes {
 
 
 						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2" data-cie-max-weeks="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" data-cie-max-range-days="<?php echo esc_attr((string) $max_range_days); ?>">
-							<div data-cie-phase="planning">
+							<div data-cie-phase="resources">
 								<fieldset class="cie-step-card first-card">
 									<hp><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
 									<div class="cie-installation-picker">
@@ -338,45 +338,92 @@ final class Shortcodes {
 										</label>
 									</div>
 									<hr/>
+									<div class="cie-resource-search-wrap">
+										<label>
+											<?php echo esc_html__('Buscar espacios o equipos', 'cie-lab-booking'); ?><br/>
+											<input type="text" data-cie-resource-search="1" placeholder="<?php echo esc_attr__('Escribe para filtrar recursos...', 'cie-lab-booking'); ?>" />
+										</label>
+									</div>
 									<fieldset class="cie-step-card" data-cie-resource-section="spaces">
 										<legend><?php echo esc_html__('Espacios', 'cie-lab-booking'); ?></legend>
-										<?php foreach ($spaces as $space): ?>
-											<label class="cie-option">
-												<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" data-cie-space-name="<?php echo esc_attr((string) $space->post_title); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
-												<?php echo esc_html($space->post_title); ?>
-											</label>
-										<?php endforeach; ?>
+										<div class="cie-resource-table-wrap">
+											<table class="cie-resource-table">
+												<thead>
+													<tr>
+														<th><?php echo esc_html__('Espacio', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Acción', 'cie-lab-booking'); ?></th>
+													</tr>
+												</thead>
+												<tbody>
+													<?php foreach ($spaces as $space): ?>
+														<tr data-cie-resource-row="1" data-cie-resource-type="space" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $space->post_title)); ?>">
+															<td><?php echo esc_html($space->post_title); ?></td>
+															<td>
+																<label class="cie-resource-toggle">
+																	<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" data-cie-space-name="<?php echo esc_attr((string) $space->post_title); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
+																	<span><?php echo esc_html__('Seleccionar', 'cie-lab-booking'); ?></span>
+																</label>
+															</td>
+														</tr>
+													<?php endforeach; ?>
+												</tbody>
+											</table>
+										</div>
 									</fieldset>
 
 									<fieldset class="cie-step-card" data-cie-resource-section="equipment">
 										<legend><?php echo esc_html__('Equipos', 'cie-lab-booking'); ?></legend>
-										<?php foreach ($equipment_grouped as $group => $items): ?>
-											<details>
-												<summary><?php echo esc_html(self::group_label($group)); ?></summary>
-												<?php foreach ($items as $eq): ?>
-													<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
-													<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
-													<label class="cie-option">
-														<input
-															type="checkbox"
-															name="equipment[]"
-															value="<?php echo esc_attr($eq->ID); ?>"
-															data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
-															data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
-															<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
-														/>
-														<?php echo esc_html($eq->post_title); ?>
-														<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
-													</label>
-												<?php endforeach; ?>
-											</details>
-										<?php endforeach; ?>
+										<div class="cie-resource-table-wrap">
+											<table class="cie-resource-table">
+												<thead>
+													<tr>
+														<th><?php echo esc_html__('Grupo', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Equipo', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Cantidad', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Acción', 'cie-lab-booking'); ?></th>
+													</tr>
+												</thead>
+												<tbody>
+													<?php foreach ($equipment_grouped as $group => $items): ?>
+														<?php foreach ($items as $eq): ?>
+															<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
+															<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
+															<tr data-cie-resource-row="1" data-cie-resource-type="equipment" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $eq->post_title . ' ' . self::group_label($group))); ?>">
+																<td><?php echo esc_html(self::group_label($group)); ?></td>
+																<td><?php echo esc_html($eq->post_title); ?></td>
+																<td><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></td>
+																<td>
+																	<label class="cie-resource-toggle">
+																		<input
+																			type="checkbox"
+																			name="equipment[]"
+																			value="<?php echo esc_attr($eq->ID); ?>"
+																			data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
+																			data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
+																			<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
+																		/>
+																		<span><?php echo esc_html__('Seleccionar', 'cie-lab-booking'); ?></span>
+																	</label>
+																</td>
+															</tr>
+														<?php endforeach; ?>
+													<?php endforeach; ?>
+												</tbody>
+											</table>
+										</div>
 										<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
 									</fieldset>
+									<p class="cie-resource-step__actions">
+										<button type="button" class="cie-btn cie-btn--primary" data-cie-continue="resources"><?php echo esc_html__('Confirmar selección y continuar', 'cie-lab-booking'); ?></button>
+									</p>
 								</fieldset>
-
-								
-
+							</div>
+							<div data-cie-phase="planning">
+								<div class="resumen-reserva" data-cie-resumen-step2>
+									<small>RESUMEN DE LA RESERVA</small>
+									<p><button type="button" class="cie-btn" data-cie-edit-resources><?php echo esc_html__('Editar recursos seleccionados', 'cie-lab-booking'); ?></button></p>
+									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
+								</div>
 								<fieldset class="cie-step-card simple-card">
 									<legend><?php echo esc_html__('FECHA Y DISPONIBILIDAD', 'cie-lab-booking'); ?></legend>
 									<div class="cie-inline-fields">
@@ -537,10 +584,6 @@ final class Shortcodes {
 										</label>
 									</p>
 								</fieldset>
-								<div class="resumen-reserva">
-									<small>RESUMEN DE LA RESERVA</small>
-									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
-								</div>
 								<p class="cie-lab-booking__submit">
 									<button type="submit" class="cie-btn cie-btn--primary">
 										<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
@@ -1059,7 +1102,7 @@ final class Shortcodes {
 		$html = '<div class="cie-booking-detail">';
 		$html .= '<div class="cie-booking-detail__title">' . esc_html($resource_title) . '</div>';
 		$html .= '<div class="cie-booking-detail__block">';
-		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock">' . esc_html__('Bloque 1', 'cie-lab-booking') . '</div>';
+		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock"></div>';
 		if ($occurrence_lines) {
 			foreach ($occurrence_lines as $line) {
 				$html .= '<div class="cie-booking-detail__line">' . esc_html($line) . '</div>';
@@ -1073,7 +1116,7 @@ final class Shortcodes {
 		}
 		$html .= '</div>';
 		$html .= '<div class="cie-booking-detail__block">';
-		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--list">' . esc_html__('Bloque 2', 'cie-lab-booking') . '</div>';
+		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--list"></div>';
 		$html .= '<div class="cie-booking-detail__line">' . esc_html__('Proyecto: ', 'cie-lab-booking') . esc_html($project_name !== '' ? $project_name : __('Sin especificar', 'cie-lab-booking')) . '</div>';
 		$html .= '<div class="cie-booking-detail__line">' . esc_html__('Responsable: ', 'cie-lab-booking') . esc_html($project_responsible !== '' ? $project_responsible : __('Sin especificar', 'cie-lab-booking')) . '</div>';
 		$html .= '</div>';

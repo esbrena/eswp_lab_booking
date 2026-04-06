@@ -588,6 +588,15 @@ color:black !important;
     flex-direction: row;
 }
 
+.cie-lab-booking__flow[data-cie-current-phase="resources"] [data-cie-phase="planning"],
+.cie-lab-booking__flow[data-cie-current-phase="resources"] [data-cie-phase="details"] {
+  display: none !important;
+}
+
+.cie-lab-booking__flow[data-cie-current-phase="planning"] [data-cie-phase="resources"] {
+  display: none !important;
+}
+
 .cie-installation-picker {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1119,9 +1128,69 @@ select {
   color:black;
   font-weight:bold;
   margin-bottom:32px;
-  margin-top:32px;
-  border-top:1px solid lightgray;
-  padding-top:16px;
+  margin-top:0;
+  border-top:none;
+  padding-top:0;
+}
+
+.cie-resource-search-wrap {
+  margin-top: 10px;
+}
+
+.cie-resource-search-wrap input[data-cie-resource-search="1"] {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.cie-resource-table-wrap {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  max-height: 260px;
+  overflow: auto;
+  background: #fff;
+}
+
+.cie-resource-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cie-resource-table th,
+.cie-resource-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cie-resource-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.cie-resource-table tr:hover td {
+  background: #f8fbff;
+}
+
+.cie-resource-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.cie-resource-step__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .cie-booking-detail {
@@ -1153,20 +1222,18 @@ select {
   gap: 6px;
 }
 
-.cie-booking-detail__block-title::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  display: inline-block;
-}
-
 .cie-booking-detail__block-title--clock::before {
-  background: #0ea5e9;
+  content: '\1F553';
+  font-size: 14px;
+  line-height: 1;
+  color: #0ea5e9;
 }
 
 .cie-booking-detail__block-title--list::before {
-  background: #64748b;
+  content: '\1F4C4';
+  font-size: 14px;
+  line-height: 1;
+  color: #64748b;
 }
 
 .cie-booking-detail__line {
@@ -1178,6 +1245,22 @@ select {
 .cie-booking-detail__line--total {
   font-weight: 700;
   color: #1e3a8a;
+}
+
+.cie-booking-detail__line--preview {
+  color: #0ea5e9;
+}
+
+.resumen-reserva[data-cie-resumen-step2] .cie-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.cie-scheduler__event-chip.is-preview {
+  background: #e0f2fe;
+  border-color: #0ea5e9;
+  color: #0c4a6e;
+  border-style: dashed;
 }
 .first-card {
   border: 1px solid #dbe3ef;

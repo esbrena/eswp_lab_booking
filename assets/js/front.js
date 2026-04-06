@@ -65,95 +65,6 @@
     return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
   }
 
-  function uniqueDatesFromOccurrences(occurrences) {
-    var map = {};
-    (Array.isArray(occurrences) ? occurrences : []).forEach(function (occ) {
-      var date = String((occ && occ.date) || '');
-      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) map[date] = true;
-    });
-    return Object.keys(map).sort();
-  }
-
-  function areConsecutiveDates(dates) {
-    if (!dates.length) return false;
-    for (var i = 1; i < dates.length; i++) {
-      var prev = parseYmd(dates[i - 1]);
-      var cur = parseYmd(dates[i]);
-      if (!prev || !cur) return false;
-      var diff = Math.round((cur.getTime() - prev.getTime()) / 86400000);
-      if (diff !== 1) return false;
-    }
-    return true;
-  }
-
-  function describeBookingDates(booking) {
-    var dates = uniqueDatesFromOccurrences(booking.occurrences);
-    if (!dates.length) {
-      var start = String(booking.start_date || '');
-      var end = String(booking.end_date || '');
-      if (start && end && start !== end) return formatDayMonth(start) + ' - ' + formatDayMonth(end);
-      if (start) return formatWeekdayDayMonth(start);
-      return '';
-    }
-    if (dates.length === 1) return formatWeekdayDayMonth(dates[0]);
-    if (areConsecutiveDates(dates)) {
-      return formatDayMonth(dates[0]) + ' - ' + formatDayMonth(dates[dates.length - 1]);
-    }
-    return dates.map(formatDayMonth).join(', ');
-  }
-
-  function describeBookingDuration(booking) {
-    var mode = String(booking.mode || '');
-    if (mode === 'full_day') return 'Todo el día';
-    var slots = Array.isArray(booking.time_slots) ? booking.time_slots : [];
-    if (slots.length === 1 && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slots[0])) {
-      var p = String(slots[0]).split('-');
-      return 'De ' + p[0] + ' a ' + p[1] + ' horas';
-    }
-    if (booking.time_start && booking.time_end) {
-      return 'De ' + booking.time_start + ' a ' + booking.time_end + ' horas';
-    }
-    if (slots.length > 1) {
-      return 'Por horas (' + slots.join(', ') + ')';
-    }
-    return 'Por horas';
-  }
-
-  function weekdayNameForDate(ymd) {
-    var d = parseYmd(ymd);
-    if (!d) return '';
-    return d.toLocaleDateString('es-ES', { weekday: 'long' });
-  }
-
-  function describeBookingRepeat(booking) {
-    var frequency = String(booking.frequency || 'single');
-    var dates = uniqueDatesFromOccurrences(booking.occurrences);
-    if (frequency === 'single') return 'Sin repetición';
-    if (frequency === 'daily') return 'Cada día';
-    if (frequency === 'biweekly_repeat') return 'Semana salteada';
-    if (frequency === 'weekly_repeat') {
-      if (dates.length === 1) {
-        var w = weekdayNameForDate(dates[0]);
-        return w ? ('Todos los ' + w) : 'Cada semana';
-      }
-      var labels = {};
-      dates.slice(0, 7).forEach(function (date) {
-        var d = parseYmd(date);
-        if (!d) return;
-        labels[d.getDay()] = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-      });
-      var days = Object.keys(labels).sort().map(function (k) { return labels[k]; });
-      return days.length ? ('Cada semana ' + days.join(', ')) : 'Cada semana';
-    }
-    return 'Sin repetición';
-  }
-
-  function bookingUntilDate(booking) {
-    var dates = uniqueDatesFromOccurrences(booking.occurrences);
-    if (dates.length) return dates[dates.length - 1];
-    return String(booking.end_date || '');
-  }
-
   function normalizeYmdList(values) {
     var map = {};
     (Array.isArray(values) ? values : []).forEach(function (value) {
@@ -338,7 +249,7 @@
     var html = '<div class="cie-booking-detail">';
     html += '<div class="cie-booking-detail__title">' + escapeHtml(title || 'Reserva') + '</div>';
     html += '<div class="cie-booking-detail__block">';
-    html += '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock">Bloque 1</div>';
+    html += '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock"></div>';
     if (lines.length) {
       lines.forEach(function (line) {
         html += '<div class="cie-booking-detail__line">' + escapeHtml(line) + '</div>';
@@ -350,7 +261,7 @@
     if (total) html += '<div class="cie-booking-detail__line cie-booking-detail__line--total">' + escapeHtml(total) + '</div>';
     html += '</div>';
     html += '<div class="cie-booking-detail__block">';
-    html += '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--list">Bloque 2</div>';
+    html += '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--list"></div>';
     html += '<div class="cie-booking-detail__line">Proyecto: ' + escapeHtml(projectName || 'Sin especificar') + '</div>';
     html += '<div class="cie-booking-detail__line">Responsable: ' + escapeHtml(projectResponsible || 'Sin especificar') + '</div>';
     html += '</div>';
@@ -724,6 +635,19 @@
       return String($flow.find('input[name="booking_installation_type"]:checked').val() || 'combined');
     }
 
+    function hasSelectedResources() {
+      var resources = selectedResources();
+      return resources.spaces.length > 0 || resources.equipment.length > 0;
+    }
+
+    function setCurrentStep(step) {
+      var isResources = step === 'resources';
+      $flow.attr('data-cie-current-step', isResources ? 'resources' : 'planning');
+      $flow.find('[data-cie-phase="resources"]').toggle(isResources);
+      $flow.find('[data-cie-phase="planning"]').toggle(!isResources);
+      $flow.find('[data-cie-phase="details"]').toggle(!isResources);
+    }
+
     function syncFrequencyOptions() {
       var dayScope = selectedDayScope();
       var scopeKey = dayScope === 'single_day' ? 'single_day' : 'all';
@@ -885,10 +809,14 @@
       var projectName = String($flow.find('input[name="project_name"]').val() || '').trim();
       var projectResponsible = String($flow.find('input[name="project_responsible"]').val() || '').trim();
       var fallbackLine = '';
+      var previewNotice = '';
       if (!dates.length) {
         fallbackLine = 'Seleccione los días de la reserva.';
       } else if (mode === 'time_range' && !slots.length) {
         fallbackLine = 'Seleccione al menos un bloque horario.';
+      }
+      if (title === 'Sin recursos seleccionados') {
+        fallbackLine = 'Seleccione uno o más recursos para continuar.';
       }
       var html = renderBookingDetailCard({
         title: title,
@@ -899,6 +827,10 @@
         projectResponsible: projectResponsible,
         fallbackLine: fallbackLine
       });
+      if (dates.length) {
+        previewNotice = '<div class="cie-booking-detail__line cie-booking-detail__line--preview">Previsualización activa en calendario</div>';
+      }
+      html += previewNotice;
       $flow.find('[data-cie-notice="schedule"]').html(html).show();
     }
 
@@ -1076,10 +1008,65 @@
       });
     }
 
-    function updateContinueState() {}
+    function updateContinueState() {
+      var selectedCount = selectedResourceNames().length;
+      $flow.find('[data-cie-continue="resources"]').prop('disabled', selectedCount === 0);
+    }
 
     function setDetailsVisible(show) {
+      if (show) setPhase('planning');
+      else setPhase('resources');
+    }
+
+    function setPhase(phase) {
+      var valid = { resources: true, planning: true, details: true };
+      var next = valid[phase] ? phase : 'resources';
+      $flow.attr('data-cie-current-phase', next);
+      $flow.find('[data-cie-phase]').hide();
+      if (next === 'resources') {
+        $flow.find('[data-cie-phase="resources"]').show();
+        return;
+      }
+      $flow.find('[data-cie-phase="planning"]').show();
       $flow.find('[data-cie-phase="details"]').show();
+    }
+
+    function applyResourceSearch() {
+      var query = String($flow.find('[data-cie-resource-search="1"]').val() || '').toLowerCase().trim();
+      $flow.find('[data-cie-resource-row="1"]').each(function () {
+        var label = String($(this).attr('data-cie-resource-label') || '').toLowerCase();
+        $(this).toggle(query === '' || label.indexOf(query) !== -1);
+      });
+    }
+
+    function updateCalendarPreview() {
+      var $scheduler = $flow.closest('form').find('.cie-scheduler[data-cie-form-linked-scheduler="1"]').first();
+      if (!$scheduler.length) return;
+      var api = $scheduler.data('cieSchedulerApi');
+      if (!api || typeof api.setPreviewReservation !== 'function') return;
+      var mode = selectedMode();
+      var frequency = selectedFrequency();
+      var dayScope = selectedDayScope();
+      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
+      var end = String($flow.find('input[name="end_date"]').val() || '').trim();
+      var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
+      var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
+      var slots = selectedTimeSlots();
+      var names = selectedResourceNames();
+      var baseDates = [];
+      if (dayScope === 'single_day') baseDates = normalizeYmdList([start]);
+      else if (dayScope === 'date_range') baseDates = buildDateRange(start, end);
+      else baseDates = parseManualDates(manual);
+      var dates = expandDatesForFrequency(baseDates, dayScope, frequency, weeks);
+      var occurrences = buildOccurrencesFromDatesAndSlots(mode, dates, slots);
+      var installType = selectedInstallationType();
+      var resourceType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
+      api.setPreviewReservation({
+        title: names.length ? ('Previsualización: ' + names.join(', ')) : 'Previsualización de reserva',
+        resources: names,
+        resourceType: resourceType,
+        occurrences: occurrences
+      });
     }
 
     function updateVisibility() {
@@ -1134,11 +1121,13 @@
         }
       }
 
+      applyResourceSearch();
       updateScheduleNotice();
       updateSlotsAvailability();
       updateFormAvailability();
       updateContinueState();
       syncLinkedScheduler();
+      updateCalendarPreview();
     }
 
     $flow.on('change input', 'input,select,textarea', function (event) {
@@ -1166,18 +1155,40 @@
     });
     $flow.on('click', '[data-cie-continue]', function (event) {
       event.preventDefault();
-      setDetailsVisible(true);
+      var key = String($(this).attr('data-cie-continue') || '');
+      if (key === 'resources') {
+        if (!selectedResourceNames().length) return;
+        setPhase('planning');
+        var $planning = $flow.find('[data-cie-phase="planning"]');
+        if ($planning.length) {
+          $('html, body').animate({ scrollTop: Math.max(0, $planning.offset().top - 30) }, 200);
+        }
+        return;
+      }
+      setDetailsVisible(false);
       var $details = $flow.find('[data-cie-phase="details"]');
       if ($details.length) {
         $('html, body').animate({ scrollTop: Math.max(0, $details.offset().top - 30) }, 200);
       }
+    });
+    $flow.on('click', '[data-cie-edit-resources]', function (event) {
+      event.preventDefault();
+      setPhase('resources');
+      var $resources = $flow.find('[data-cie-phase="resources"]');
+      if ($resources.length) {
+        $('html, body').animate({ scrollTop: Math.max(0, $resources.offset().top - 30) }, 200);
+      }
+    });
+    $flow.on('input', '[data-cie-resource-search="1"]', function () {
+      applyResourceSearch();
     });
     $flow.on('change', 'input[name="booking_time_slots[]"]', function () {
       var $chip = $(this).closest('.cie-slot-chip');
       $chip.toggleClass('is-selected', $(this).is(':checked'));
       updateScheduleNotice();
     });
-    setDetailsVisible(true);
+    setPhase('resources');
+    applyResourceSearch();
     updateVisibility();
   }
 
@@ -1187,7 +1198,8 @@
       event.type === 'block' ? 'is-block' : 'is-booking',
       'is-' + statusSlug(event.status || ''),
       event.isPast ? 'is-past' : '',
-      resourceTypeClass(event.resourceType || '')
+      resourceTypeClass(event.resourceType || ''),
+      event.isPreview ? 'is-preview' : ''
     ].join(' ');
     var label = (withTime && event.start ? event.start + ' ' : '') + (event.title || 'Reserva');
     var attrs = '';
@@ -1536,6 +1548,35 @@
         if (toYmd(state.current) === toYmd(next)) return;
         state.current = next;
         load();
+      },
+      setPreviewReservation: function (payload) {
+        var events = state.events.filter(function (event) { return !event.isPreview; });
+        var occurrences = Array.isArray(payload && payload.occurrences) ? payload.occurrences : [];
+        var title = String((payload && payload.title) || 'Mi reserva');
+        var resources = Array.isArray(payload && payload.resources) ? payload.resources : [];
+        var resourceType = String((payload && payload.resourceType) || 'combined');
+        occurrences.forEach(function (occ, index) {
+          var date = String((occ && occ.date) || '');
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+          var fullDay = !!(occ && occ.full_day);
+          events.push({
+            id: 'preview-' + index + '-' + date,
+            type: 'booking',
+            bookingId: 0,
+            date: date,
+            start: fullDay ? '' : String((occ && occ.start) || ''),
+            end: fullDay ? '' : String((occ && occ.end) || ''),
+            fullDay: fullDay,
+            title: title,
+            resources: resources,
+            resourceType: resourceType,
+            status: 'pending',
+            isPast: false,
+            isPreview: true
+          });
+        });
+        state.events = events;
+        render();
       }
     });
 
