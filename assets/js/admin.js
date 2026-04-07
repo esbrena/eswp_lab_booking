@@ -345,9 +345,15 @@
     var html = '<div class="cie-day-timeline"><h5>Huecos y ocupación del día</h5><div class="cie-day-timeline__table">';
     hours.forEach(function (slot) {
       var hasBooking = slot.bookingIds.length > 0;
-      var rowClass = isDayBlocked ? 'is-blocked' : hasBooking ? 'is-busy' : 'is-free';
+      // When block and booking coexist, show mixed state instead of hiding bookings.
+      var rowClass = (isDayBlocked && hasBooking) ? 'is-mixed' : (isDayBlocked ? 'is-blocked' : (hasBooking ? 'is-busy' : 'is-free'));
       html += '<div class="cie-day-timeline__row ' + rowClass + '"><div class="cie-day-timeline__hour">' + minutesToHourLabel(slot.start) + '</div><div class="cie-day-timeline__state">';
-      if (isDayBlocked) {
+      if (isDayBlocked && hasBooking) {
+        html += 'Bloqueado y con reservas: ';
+        html += slot.bookingIds.map(function (id) {
+          return '<span class="cie-inline-link" data-cie-booking-id="' + id + '" role="button" tabindex="0">' + escapeHtml(bookingNames[id]) + '</span>';
+        }).join(', ');
+      } else if (isDayBlocked) {
         html += 'Bloqueado por mantenimiento';
       } else if (hasBooking) {
         html += slot.bookingIds.map(function (id) {
@@ -399,7 +405,8 @@
       action: 'cie_lab_booking_day_details',
       nonce: window.CieLabBookingAdmin.nonce,
       date: date,
-      calendar_scope: scope || 'general'
+      calendar_scope: scope || 'general',
+      booking_view: (filters && filters.bookingView) ? String(filters.bookingView) : 'approved'
     }).done(function (response) {
       if (!response || !response.success || !response.data) {
         $modal.find('.cie-modal__content').html('<p>No se pudo cargar el detalle.</p>');
@@ -483,12 +490,17 @@
     if (!$container.length || !window.CieLabBookingAdmin) return;
     var scope = String($container.attr('data-cie-calendar-scope') || 'general');
     var defaultView = String($container.attr('data-cie-default-view') || 'month');
+    var initialBookingView = String($container.attr('data-cie-booking-view') || 'approved');
+    if (initialBookingView !== 'approved' && initialBookingView !== 'pending' && initialBookingView !== 'all') {
+      initialBookingView = 'approved';
+    }
     var state = {
       view: (defaultView === 'week' || defaultView === 'day') ? defaultView : 'month',
       current: new Date(),
       events: [],
       filterType: 'all',
-      filterResource: 'all'
+      filterResource: 'all',
+      bookingView: initialBookingView
     };
 
     function rangeForView() {
@@ -557,6 +569,11 @@
             '<button type="button" data-cie-view="day"' + (state.view === 'day' ? ' class="is-active"' : '') + '>Día</button>' +
           '</div>' +
           '<div class="cie-scheduler__filters">' +
+            '<select data-cie-filter-booking-view>' +
+              '<option value="approved"' + (state.bookingView === 'approved' ? ' selected' : '') + '>Validadas</option>' +
+              '<option value="pending"' + (state.bookingView === 'pending' ? ' selected' : '') + '>Pendientes</option>' +
+              '<option value="all"' + (state.bookingView === 'all' ? ' selected' : '') + '>Todas</option>' +
+            '</select>' +
             '<select data-cie-filter-type>' +
               '<option value="all"' + (state.filterType === 'all' ? ' selected' : '') + '>Todos</option>' +
               '<option value="combined"' + (state.filterType === 'combined' ? ' selected' : '') + '>Combinada</option>' +
@@ -591,6 +608,9 @@
         events.slice(0, 2).forEach(function (event) {
           html += renderEventChip(event, false);
         });
+        if (events.length > 2) {
+          html += '<span class="cie-scheduler__event-more"><button type="button" class="cie-scheduler__event-more-link" data-cie-open-day-more="' + ymd + '">Ver más…</button></span>';
+        }
         html += '</div>';
       }
       html += '</div></div>';
@@ -621,7 +641,10 @@
         var allDayClasses = ['cie-scheduler__time-cell'];
         if (allDay === todayYmd) allDayClasses.push('is-today');
         html += '<div class="' + allDayClasses.join(' ') + '" data-cie-open-day="' + allDay + '">';
-        allDayEvents.forEach(function (event) { html += renderEventChip(event, false); });
+        allDayEvents.slice(0, 2).forEach(function (event) { html += renderEventChip(event, false); });
+        if (allDayEvents.length > 2) {
+          html += '<span class="cie-scheduler__event-more"><button type="button" class="cie-scheduler__event-more-link" data-cie-open-day-more="' + allDay + '">Ver más…</button></span>';
+        }
         html += '</div>';
       }
       html += '</div>';
@@ -665,7 +688,8 @@
         nonce: window.CieLabBookingAdmin.nonce,
         start_date: range.start,
         end_date: range.end,
-        calendar_scope: scope
+        calendar_scope: scope,
+        booking_view: state.bookingView
       }).done(function (response) {
         if (!response || !response.success || !response.data || !Array.isArray(response.data.events)) {
           $container.html('<p>No se pudo cargar el calendario.</p>');
@@ -697,14 +721,32 @@
       state.filterResource = String($(this).val() || 'all');
       render();
     });
+    $container.on('change', '[data-cie-filter-booking-view]', function () {
+      state.bookingView = String($(this).val() || 'approved');
+      load();
+    });
     $container.on('click', '[data-cie-open-day]', function (event) {
       if ($(event.target).closest('[data-cie-booking-id]').length) return;
+      if ($(event.target).closest('[data-cie-open-day-more]').length) return;
       event.preventDefault();
       var date = String($(this).attr('data-cie-open-day') || '');
       if (date) {
         openDayDetails(date, scope, {
           resourceType: state.filterType,
-          resourceName: state.filterResource
+          resourceName: state.filterResource,
+          bookingView: state.bookingView
+        });
+      }
+    });
+    $container.on('click', '[data-cie-open-day-more]', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      var date = String($(this).attr('data-cie-open-day-more') || '');
+      if (date) {
+        openDayDetails(date, scope, {
+          resourceType: state.filterType,
+          resourceName: state.filterResource,
+          bookingView: state.bookingView
         });
       }
     });

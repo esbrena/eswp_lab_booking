@@ -319,7 +319,7 @@ final class Shortcodes {
 						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2" data-cie-max-weeks="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" data-cie-max-range-days="<?php echo esc_attr((string) $max_range_days); ?>">
 							<div data-cie-phase="resources">
 								<fieldset class="cie-step-card first-card">
-									<hp><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
+									<p><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
 									<div class="cie-installation-picker">
 										<label class="cie-installation-card" data-cie-installation-card="space">
 											<input type="radio" name="booking_installation_type" value="space" <?php checked($installation_type === 'space'); ?> />
@@ -361,7 +361,7 @@ final class Shortcodes {
 															<td>
 																<label class="cie-resource-toggle">
 																	<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" data-cie-space-name="<?php echo esc_attr((string) $space->post_title); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
-																	<span><?php echo esc_html__('Seleccionar', 'cie-lab-booking'); ?></span>
+																	<span><?php echo esc_html__('Añadir', 'cie-lab-booking'); ?></span>
 																</label>
 															</td>
 														</tr>
@@ -377,21 +377,24 @@ final class Shortcodes {
 											<table class="cie-resource-table">
 												<thead>
 													<tr>
-														<th><?php echo esc_html__('Grupo', 'cie-lab-booking'); ?></th>
 														<th><?php echo esc_html__('Equipo', 'cie-lab-booking'); ?></th>
-														<th><?php echo esc_html__('Cantidad', 'cie-lab-booking'); ?></th>
 														<th><?php echo esc_html__('Acción', 'cie-lab-booking'); ?></th>
 													</tr>
 												</thead>
 												<tbody>
 													<?php foreach ($equipment_grouped as $group => $items): ?>
+														<tr class="cie-resource-group-row" data-cie-group-header="<?php echo esc_attr($group); ?>">
+															<td colspan="2">
+																<button type="button" class="cie-resource-group-toggle" data-cie-toggle-group="<?php echo esc_attr($group); ?>" aria-expanded="true">
+																	<span class="cie-resource-group-toggle__icon" aria-hidden="true"></span>
+																	<span><?php echo esc_html(self::group_label($group)); ?></span>
+																</button>
+															</td>
+														</tr>
 														<?php foreach ($items as $eq): ?>
-															<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
 															<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
-															<tr data-cie-resource-row="1" data-cie-resource-type="equipment" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $eq->post_title . ' ' . self::group_label($group))); ?>">
-																<td><?php echo esc_html(self::group_label($group)); ?></td>
+															<tr data-cie-resource-row="1" data-cie-resource-group="<?php echo esc_attr($group); ?>" data-cie-resource-type="equipment" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $eq->post_title . ' ' . self::group_label($group))); ?>">
 																<td><?php echo esc_html($eq->post_title); ?></td>
-																<td><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></td>
 																<td>
 																	<label class="cie-resource-toggle">
 																		<input
@@ -402,7 +405,7 @@ final class Shortcodes {
 																			data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
 																			<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
 																		/>
-																		<span><?php echo esc_html__('Seleccionar', 'cie-lab-booking'); ?></span>
+																		<span><?php echo esc_html__('Añadir', 'cie-lab-booking'); ?></span>
 																	</label>
 																</td>
 															</tr>
@@ -413,6 +416,11 @@ final class Shortcodes {
 										</div>
 										<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
 									</fieldset>
+									<div class="cie-selected-resources-step1">
+										<strong><?php echo esc_html__('Recursos seleccionados', 'cie-lab-booking'); ?></strong>
+										<div class="cie-selected-tags" data-cie-selected-tags="1"></div>
+									</div>
+									<div class="cie-lab-booking__notice is-error" data-cie-notice="resources-required" style="display:none"></div>
 									<p class="cie-resource-step__actions">
 										<button type="button" class="cie-btn cie-btn--primary" data-cie-continue="resources"><?php echo esc_html__('Confirmar selección y continuar', 'cie-lab-booking'); ?></button>
 									</p>
@@ -444,11 +452,11 @@ final class Shortcodes {
 									<div class="cie-inline-fields">
 										<label data-cie-hide-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 											<?php echo esc_html__('Fecha de inicio', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($posted_start); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($posted_start); ?>" placeholder="YYYY-MM-DD" />
 										</label>
 										<label data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
 											<?php echo esc_html__('Fecha de fin', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
 										</label>
 									</div>
 									<p class="cie-cal-muted" data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
@@ -465,7 +473,7 @@ final class Shortcodes {
 									<p data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 										<label>
 											<?php echo esc_html__('Elige días', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" />
 										</label>
 									</p>
 
@@ -540,11 +548,20 @@ final class Shortcodes {
 											</label>
 										<?php endforeach; ?>
 									</div>
+									<p class="cie-lab-booking__submit">
+										<button type="button" class="cie-btn cie-btn--primary" data-cie-continue="planning">
+											<?php echo esc_html__('Verificar reserva', 'cie-lab-booking'); ?>
+										</button>
+									</p>
 								</fieldset>
 
 							</div>
 
 							<div data-cie-phase="details">
+								<div class="cie-lab-booking__notice is-info" data-cie-notice="verification-status"></div>
+								<p class="cie-resource-step__actions">
+									<button type="button" class="cie-btn" data-cie-back-planning><?php echo esc_html__('Editar fecha y disponibilidad', 'cie-lab-booking'); ?></button>
+								</p>
 								<fieldset class="cie-step-card simple-card">
 									<legend><?php echo esc_html__('FORMACIÓN', 'cie-lab-booking'); ?></legend>
 									<label class="cie-option">
