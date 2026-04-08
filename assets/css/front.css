@@ -143,6 +143,62 @@
   margin-top: 10px;
 }
 
+.cie-inline-tabs__bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.cie-inline-tabs__tab {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1rem;
+  user-select: none;
+  color: gray;
+  background: white !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.cie-inline-tabs__tab.is-active {
+  border-bottom: 4px solid black !important;
+  color: black;
+}
+
+.cie-inline-tabs__tab:hover {
+  background: #eeeeee !important;
+}
+
+.cie-inline-tabs__select {
+  margin-left: auto;
+  display: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #fff;
+}
+
+.cie-inline-tabs__panel {
+  display: none;
+}
+
+.cie-inline-tabs__panel.is-active {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .cie-inline-tabs__tab {
+    display: none;
+  }
+  .cie-inline-tabs__select {
+    display: block;
+  }
+}
+
 .cie-native-tabs__radio {
   position: absolute;
   left: -9999px;

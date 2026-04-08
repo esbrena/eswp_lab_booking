@@ -669,20 +669,6 @@ final class Shortcodes {
 			<?php echo self::render_action_notice($action_notice); ?>
 
 			<div id="<?php echo esc_attr($uid); ?>" class="cie-inline-tabs" data-cie-inline-tabs>
-				<style>
-					/* Inline tabs CSS (scoped to this shortcode instance) */
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__bar{display:flex;gap:8px;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{padding:8px 12px;cursor:pointer;font-weight:800;font-size:1rem;user-select:none; color:gray;background:white !important; border-radius:0px !important; border:none !important;}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab.is-active{border-bottom:4px black solid !important; color:black;} .cie-inline-tabs__tab:hover { background:#eeeeee !important;}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{margin-left:auto;display:none;padding:8px 10px;border-radius:10px;border:1px solid rgba(15,23,42,.2);background:#fff}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel{display:none}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel.is-active{display:block}
-					@media (max-width:640px){
-						#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{display:none}
-						#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{display:block}
-					}
-				</style>
-
 				<div class="cie-inline-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
 					<button type="button" class="cie-inline-tabs__tab is-active" role="tab" aria-selected="true" data-tab="current">
 						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>

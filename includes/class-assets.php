@@ -7,6 +7,47 @@ if (!defined('ABSPATH')) {
 }
 
 final class Assets {
+	/**
+	 * @return array<int,string>
+	 */
+	private static function front_shortcode_tags(): array {
+		return [
+			'cie_booking_form',
+			'cie_my_bookings',
+			'cie_my_bookings_current',
+			'cie_my_bookings_history',
+			'cie_my_active_bookings_card',
+			'cie_booking_calendar',
+		];
+	}
+
+	private static function page_needs_front_scripts(): bool {
+		$post = get_post();
+		if (!$post) {
+			return (bool) apply_filters('cie_lab_booking_force_front_scripts', false);
+		}
+
+		$tags = self::front_shortcode_tags();
+		$content = (string) $post->post_content;
+		foreach ($tags as $tag) {
+			if (has_shortcode($content, $tag)) {
+				return true;
+			}
+		}
+
+		// Elementor stores content in JSON under _elementor_data, not in post_content.
+		$elementor_data = (string) get_post_meta((int) $post->ID, '_elementor_data', true);
+		if ($elementor_data !== '') {
+			foreach ($tags as $tag) {
+				if (strpos($elementor_data, '[' . $tag) !== false || strpos($elementor_data, $tag) !== false) {
+					return true;
+				}
+			}
+		}
+
+		return (bool) apply_filters('cie_lab_booking_force_front_scripts', false);
+	}
+
 	private static function asset_version(string $relative_path): string {
 		$abs = CIE_LAB_BOOKING_DIR . '/' . ltrim($relative_path, '/');
 		if (file_exists($abs)) {
@@ -21,20 +62,16 @@ final class Assets {
 	}
 
 	public static function enqueue_front(): void {
-		if (!is_singular()) {
-			return;
-		}
+		// Front CSS is always loaded so shortcodes rendered by builders
+		// (e.g. Elementor) keep visual styles even if content isn't in post_content.
+		wp_enqueue_style(
+			'cie-lab-booking-front',
+			CIE_LAB_BOOKING_URL . 'assets/css/front.css',
+			[],
+			self::asset_version('assets/css/front.css')
+		);
 
-		$post = get_post();
-		if (!$post) {
-			return;
-		}
-
-		$needs = has_shortcode($post->post_content, 'cie_booking_form')
-			|| has_shortcode($post->post_content, 'cie_my_bookings')
-			|| has_shortcode($post->post_content, 'cie_booking_calendar');
-
-		if (!$needs) {
+		if (!self::page_needs_front_scripts()) {
 			return;
 		}
 
@@ -58,13 +95,6 @@ final class Assets {
 			['cie-flatpickr'],
 			self::asset_version('assets/vendor/flatpickr/es.js'),
 			true
-		);
-
-		wp_enqueue_style(
-			'cie-lab-booking-front',
-			CIE_LAB_BOOKING_URL . 'assets/css/front.css',
-			[],
-			self::asset_version('assets/css/front.css')
 		);
 		wp_enqueue_script(
 			'cie-lab-booking-front',
