@@ -198,7 +198,7 @@
 
 .cie-admin-calendar-layout {
   display: grid;
-  grid-template-columns: minmax(640px, 1fr) minmax(640px, 1fr);
+  grid-template-columns: minmax(640px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -208,9 +208,7 @@
 }
 
 .cie-admin-calendar-layout__right {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: none;
 }
 
 .cie-admin-panel {
@@ -510,6 +508,12 @@
   grid-template-columns: 76px repeat(7, minmax(0, 1fr));
 }
 
+.cie-scheduler__all-day-row {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 76px repeat(7, minmax(0, 1fr));
+}
+
 .cie-scheduler__time-label {
   font-size: 11px;
   color: #475569;
@@ -532,11 +536,51 @@
 .cie-scheduler__time-cell {
   border: 1px solid #dbe3ef;
   border-radius: 8px;
-  min-height: 36px;
+  min-height: 56px;
   padding: 4px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  align-content: flex-start;
+  overflow: hidden;
+}
+
+.cie-scheduler__all-day-row .cie-scheduler__time-cell {
+  min-height: 64px;
+}
+
+.cie-scheduler__all-day-row .cie-scheduler__event-chip {
+  max-width: 100%;
+}
+
+.cie-scheduler__event-more-link {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cie-admin-calendar-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+}
+
+.cie-admin-calendar-switch select {
+  min-height: 30px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 2px 8px;
 }
 
 .cie-day-timeline {
@@ -582,4 +626,49 @@
 .cie-inline-link {
   text-decoration: underline;
   cursor: pointer;
+}
+
+.cie-booking-detail {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.cie-booking-detail__title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cie-booking-detail__block {
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
+}
+
+.cie-booking-detail__block-title {
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.cie-booking-detail__block-title--clock::before {
+  content: '🕒 ';
+}
+
+.cie-booking-detail__block-title--list::before {
+  content: '≡ ';
+}
+
+.cie-booking-detail__line {
+  color: #334155;
+  font-size: 13px;
+  margin: 2px 0;
+}
+
+.cie-booking-detail__line--total {
+  font-weight: 700;
+  color: #0f172a;
 }

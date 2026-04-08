@@ -119,6 +119,10 @@ final class Shortcodes {
 		$range_prefill = trim((string) ($_POST['booking_range'] ?? ''));
 		$posted_start = trim((string) ($_POST['start_date'] ?? ''));
 		$posted_end = trim((string) ($_POST['end_date'] ?? ''));
+		if ($posted_start === '') {
+			$posted_start = (string) current_time('Y-m-d');
+			$_POST['start_date'] = $posted_start;
+		}
 		if ($range_prefill === '' && $posted_start !== '' && $posted_end !== '') {
 			$range_prefill = $posted_start . ' to ' . $posted_end;
 		}
@@ -313,9 +317,9 @@ final class Shortcodes {
 
 
 						<div class="cie-lab-booking__flow cie-lab-booking__flow--v2" data-cie-booking-flow="2" data-cie-max-weeks="<?php echo esc_attr((string) $max_recurrence_weeks); ?>" data-cie-max-range-days="<?php echo esc_attr((string) $max_range_days); ?>">
-							<div data-cie-phase="planning">
+							<div data-cie-phase="resources">
 								<fieldset class="cie-step-card first-card">
-									<hp><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
+									<p><strong><?php echo esc_html__('¿Qué quieres reservar?', 'cie-lab-booking'); ?></strong></p>
 									<div class="cie-installation-picker">
 										<label class="cie-installation-card" data-cie-installation-card="space">
 											<input type="radio" name="booking_installation_type" value="space" <?php checked($installation_type === 'space'); ?> />
@@ -334,45 +338,100 @@ final class Shortcodes {
 										</label>
 									</div>
 									<hr/>
+									<div class="cie-resource-search-wrap">
+										<label>
+											<?php echo esc_html__('Buscar espacios o equipos', 'cie-lab-booking'); ?><br/>
+											<input type="text" data-cie-resource-search="1" placeholder="<?php echo esc_attr__('Escribe para filtrar recursos...', 'cie-lab-booking'); ?>" />
+										</label>
+									</div>
 									<fieldset class="cie-step-card" data-cie-resource-section="spaces">
 										<legend><?php echo esc_html__('Espacios', 'cie-lab-booking'); ?></legend>
-										<?php foreach ($spaces as $space): ?>
-											<label class="cie-option">
-												<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" data-cie-space-name="<?php echo esc_attr((string) $space->post_title); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
-												<?php echo esc_html($space->post_title); ?>
-											</label>
-										<?php endforeach; ?>
+										<div class="cie-resource-table-wrap">
+											<table class="cie-resource-table">
+												<thead>
+													<tr>
+														<th><?php echo esc_html__('Espacio', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Acción', 'cie-lab-booking'); ?></th>
+													</tr>
+												</thead>
+												<tbody>
+													<?php foreach ($spaces as $space): ?>
+														<tr data-cie-resource-row="1" data-cie-resource-type="space" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $space->post_title)); ?>">
+															<td><?php echo esc_html($space->post_title); ?></td>
+															<td>
+																<label class="cie-resource-toggle">
+																	<input type="checkbox" name="spaces[]" value="<?php echo esc_attr($space->ID); ?>" data-cie-space-name="<?php echo esc_attr((string) $space->post_title); ?>" <?php echo in_array((string) $space->ID, $posted_space_ids, true) ? 'checked' : ''; ?> />
+																	<span><?php echo esc_html__('Añadir', 'cie-lab-booking'); ?></span>
+																</label>
+															</td>
+														</tr>
+													<?php endforeach; ?>
+												</tbody>
+											</table>
+										</div>
 									</fieldset>
 
 									<fieldset class="cie-step-card" data-cie-resource-section="equipment">
 										<legend><?php echo esc_html__('Equipos', 'cie-lab-booking'); ?></legend>
-										<?php foreach ($equipment_grouped as $group => $items): ?>
-											<details>
-												<summary><?php echo esc_html(self::group_label($group)); ?></summary>
-												<?php foreach ($items as $eq): ?>
-													<?php $eq_qty = Bookings::get_resource_quantity((int) $eq->ID); ?>
-													<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
-													<label class="cie-option">
-														<input
-															type="checkbox"
-															name="equipment[]"
-															value="<?php echo esc_attr($eq->ID); ?>"
-															data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
-															data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
-															<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
-														/>
-														<?php echo esc_html($eq->post_title); ?>
-														<small><?php echo esc_html(sprintf(_n('%d unidad', '%d unidades', $eq_qty, 'cie-lab-booking'), $eq_qty)); ?></small>
-													</label>
-												<?php endforeach; ?>
-											</details>
-										<?php endforeach; ?>
+										<div class="cie-resource-table-wrap">
+											<table class="cie-resource-table">
+												<thead>
+													<tr>
+														<th><?php echo esc_html__('Equipo', 'cie-lab-booking'); ?></th>
+														<th><?php echo esc_html__('Acción', 'cie-lab-booking'); ?></th>
+													</tr>
+												</thead>
+												<tbody>
+													<?php foreach ($equipment_grouped as $group => $items): ?>
+														<tr class="cie-resource-group-row" data-cie-group-header="<?php echo esc_attr($group); ?>">
+															<td colspan="2">
+																<button type="button" class="cie-resource-group-toggle" data-cie-toggle-group="<?php echo esc_attr($group); ?>" aria-expanded="true">
+																	<span class="cie-resource-group-toggle__icon" aria-hidden="true"></span>
+																	<span><?php echo esc_html(self::group_label($group)); ?></span>
+																</button>
+															</td>
+														</tr>
+														<?php foreach ($items as $eq): ?>
+															<?php $eq_required = Bookings::get_equipment_required_ids((int) $eq->ID); ?>
+															<tr data-cie-resource-row="1" data-cie-resource-group="<?php echo esc_attr($group); ?>" data-cie-resource-type="equipment" data-cie-resource-label="<?php echo esc_attr(Util::lc((string) $eq->post_title . ' ' . self::group_label($group))); ?>">
+																<td><?php echo esc_html($eq->post_title); ?></td>
+																<td>
+																	<label class="cie-resource-toggle">
+																		<input
+																			type="checkbox"
+																			name="equipment[]"
+																			value="<?php echo esc_attr($eq->ID); ?>"
+																			data-cie-equipment-name="<?php echo esc_attr((string) $eq->post_title); ?>"
+																			data-cie-requires="<?php echo esc_attr((string) wp_json_encode(array_values(array_map('intval', $eq_required)))); ?>"
+																			<?php echo in_array((string) $eq->ID, $posted_equipment_ids, true) ? 'checked' : ''; ?>
+																		/>
+																		<span><?php echo esc_html__('Añadir', 'cie-lab-booking'); ?></span>
+																	</label>
+																</td>
+															</tr>
+														<?php endforeach; ?>
+													<?php endforeach; ?>
+												</tbody>
+											</table>
+										</div>
 										<div class="cie-lab-booking__notice" data-cie-notice="equipment-deps" style="display:none"></div>
 									</fieldset>
+									<div class="cie-selected-resources-step1">
+										<strong><?php echo esc_html__('Recursos seleccionados', 'cie-lab-booking'); ?></strong>
+										<div class="cie-selected-tags" data-cie-selected-tags="1"></div>
+									</div>
+									<div class="cie-lab-booking__notice is-error" data-cie-notice="resources-required" style="display:none"></div>
+									<p class="cie-resource-step__actions">
+										<button type="button" class="cie-btn cie-btn--primary" data-cie-continue="resources"><?php echo esc_html__('Confirmar selección y continuar', 'cie-lab-booking'); ?></button>
+									</p>
 								</fieldset>
-
-								
-
+							</div>
+							<div data-cie-phase="planning">
+								<div class="resumen-reserva" data-cie-resumen-step2>
+									<small>RESUMEN DE LA RESERVA</small>
+									<p><button type="button" class="cie-btn" data-cie-edit-resources><?php echo esc_html__('Editar recursos seleccionados', 'cie-lab-booking'); ?></button></p>
+									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
+								</div>
 								<fieldset class="cie-step-card simple-card">
 									<legend><?php echo esc_html__('FECHA Y DISPONIBILIDAD', 'cie-lab-booking'); ?></legend>
 									<div class="cie-inline-fields">
@@ -393,11 +452,11 @@ final class Shortcodes {
 									<div class="cie-inline-fields">
 										<label data-cie-hide-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 											<?php echo esc_html__('Fecha de inicio', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($_POST['start_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date" name="start_date" value="<?php echo esc_attr($posted_start); ?>" placeholder="YYYY-MM-DD" />
 										</label>
 										<label data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
 											<?php echo esc_html__('Fecha de fin', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date" name="end_date" value="<?php echo esc_attr($_POST['end_date'] ?? ''); ?>" placeholder="YYYY-MM-DD" />
 										</label>
 									</div>
 									<p class="cie-cal-muted" data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_RANGE); ?>">
@@ -414,7 +473,7 @@ final class Shortcodes {
 									<p data-cie-only-day-scope="<?php echo esc_attr(Bookings::BOOKING_DAY_SCOPE_LOOSE); ?>">
 										<label>
 											<?php echo esc_html__('Elige días', 'cie-lab-booking'); ?><br/>
-											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" data-cie-min-date="<?php echo esc_attr(gmdate('Y-m-d')); ?>" />
+											<input type="text" class="cie-date-multiple" name="booking_dates_raw" value="<?php echo esc_attr($booking_dates_raw); ?>" placeholder="YYYY-MM-DD, YYYY-MM-DD" />
 										</label>
 									</p>
 
@@ -489,11 +548,20 @@ final class Shortcodes {
 											</label>
 										<?php endforeach; ?>
 									</div>
+									<p class="cie-lab-booking__submit">
+										<button type="button" class="cie-btn cie-btn--primary" data-cie-continue="planning">
+											<?php echo esc_html__('Verificar reserva', 'cie-lab-booking'); ?>
+										</button>
+									</p>
 								</fieldset>
 
 							</div>
 
 							<div data-cie-phase="details">
+								<div class="cie-lab-booking__notice is-info" data-cie-notice="verification-status"></div>
+								<p class="cie-resource-step__actions">
+									<button type="button" class="cie-btn" data-cie-back-planning><?php echo esc_html__('Editar fecha y disponibilidad', 'cie-lab-booking'); ?></button>
+								</p>
 								<fieldset class="cie-step-card simple-card">
 									<legend><?php echo esc_html__('FORMACIÓN', 'cie-lab-booking'); ?></legend>
 									<label class="cie-option">
@@ -533,10 +601,6 @@ final class Shortcodes {
 										</label>
 									</p>
 								</fieldset>
-								<div class="resumen-reserva">
-									<small>RESUMEN DE LA RESERVA</small>
-									<div class="cie-lab-booking__notice is-info" data-cie-notice="schedule"></div>
-								</div>
 								<p class="cie-lab-booking__submit">
 									<button type="submit" class="cie-btn cie-btn--primary">
 										<?php echo esc_html($is_edit_mode ? __('Enviar cambios', 'cie-lab-booking') : __('Enviar reserva', 'cie-lab-booking')); ?>
@@ -942,7 +1006,7 @@ final class Shortcodes {
 				$admin_message = (string) get_post_meta($b->ID, '_cie_booking_admin_message', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
-				$schedule_summary = self::booking_schedule_summary((int) $b->ID);
+				$schedule_detail_html = self::booking_schedule_detail_html((int) $b->ID);
 				$base = self::resolve_form_base_url($form_url);
 				$edit_url = add_query_arg(
 					[
@@ -958,8 +1022,13 @@ final class Shortcodes {
 				<tr>
 					<!-- <td><?php echo esc_html($start . ' - ' . $end); ?></td> -->
 					<td>
-						<strong><?php echo esc_html(self::resources_summary($spaces, $equipment)); ?></strong><br/>
-						<small><?php echo esc_html($schedule_summary !== '' ? $schedule_summary : ($start . ' - ' . $end)); ?></small>
+						<?php
+						if ($schedule_detail_html !== '') {
+							echo $schedule_detail_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} else {
+							echo '<strong>' . esc_html(self::resources_summary($spaces, $equipment)) . '</strong><br/><small>' . esc_html($start . ' - ' . $end) . '</small>';
+						}
+						?>
 					</td>
 					<td width="200px;">
 						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr($status_slug); ?>">
@@ -1031,42 +1100,189 @@ final class Shortcodes {
 		return $map[$status] ?? 'unknown';
 	}
 
-	private static function booking_schedule_summary(int $booking_id): string {
+	private static function booking_schedule_detail_html(int $booking_id): string {
 		$mode = sanitize_key((string) get_post_meta($booking_id, '_cie_booking_mode', true));
 		$frequency = sanitize_key((string) get_post_meta($booking_id, '_cie_booking_frequency', true));
-		$start = (string) get_post_meta($booking_id, '_cie_booking_start_date', true);
-		$end = (string) get_post_meta($booking_id, '_cie_booking_end_date', true);
-		$time_start = (string) get_post_meta($booking_id, '_cie_booking_time_start', true);
-		$time_end = (string) get_post_meta($booking_id, '_cie_booking_time_end', true);
-		$weeks = max(1, (int) get_post_meta($booking_id, '_cie_booking_recurrence_weeks', true));
-		$selected_dates = array_values(array_filter(array_map('strval', (array) get_post_meta($booking_id, '_cie_booking_selected_dates', true))));
-		$is_time = $mode === Bookings::BOOKING_MODE_TIME_RANGE;
-		$time_range = ($time_start !== '' && $time_end !== '') ? (' (' . $time_start . ' - ' . $time_end . ')') : '';
+		$spaces = (array) get_post_meta($booking_id, '_cie_booking_spaces', true);
+		$equipment = (array) get_post_meta($booking_id, '_cie_booking_equipment', true);
+		$resource_title = self::resources_summary($spaces, $equipment);
+		if ($resource_title === '') {
+			$resource_title = sprintf(__('Reserva #%d', 'cie-lab-booking'), $booking_id);
+		}
+		$project_name = trim((string) get_post_meta($booking_id, '_cie_booking_project_name', true));
+		$project_responsible = trim((string) get_post_meta($booking_id, '_cie_booking_project_responsible', true));
+		$occurrences = Bookings::get_booking_occurrences($booking_id);
+		$occurrence_lines = self::booking_occurrence_lines($occurrences, 3);
+		$repeat_line = self::booking_repeat_line($frequency, $occurrences);
+		$total_line = self::booking_total_line($occurrences, $mode);
 
-		if ($frequency === Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT) {
-			return sprintf(
-				/* translators: %d: weeks */
-				__('Semanal durante %d semanas', 'cie-lab-booking'),
-				$weeks
-			) . ($is_time ? $time_range : ' · ' . __('Día completo', 'cie-lab-booking'));
-		}
-		if ($frequency === Bookings::BOOKING_FREQUENCY_MANUAL_DATES) {
-			if ($selected_dates) {
-				$max = 3;
-				$shown = array_slice($selected_dates, 0, $max);
-				$label = implode(', ', $shown);
-				if (count($selected_dates) > $max) {
-					$label .= ' +' . (count($selected_dates) - $max);
-				}
-				return $label . ($is_time ? $time_range : ' · ' . __('Día completo', 'cie-lab-booking'));
+		$html = '<div class="cie-booking-detail">';
+		$html .= '<div class="cie-booking-detail__title">' . esc_html($resource_title) . '</div>';
+		$html .= '<div class="cie-booking-detail__block">';
+		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock"></div>';
+		if ($occurrence_lines) {
+			foreach ($occurrence_lines as $line) {
+				$html .= '<div class="cie-booking-detail__line">' . esc_html($line) . '</div>';
 			}
-			return __('Fechas sueltas', 'cie-lab-booking') . ($is_time ? $time_range : '');
 		}
-		if ($start !== '' && $end !== '') {
-			$label = $start === $end ? $start : ($start . ' - ' . $end);
-			return $label . ($is_time ? $time_range : ' · ' . __('Día completo', 'cie-lab-booking'));
+		if ($repeat_line !== '') {
+			$html .= '<div class="cie-booking-detail__line">' . esc_html($repeat_line) . '</div>';
+		}
+		if ($total_line !== '') {
+			$html .= '<div class="cie-booking-detail__line cie-booking-detail__line--total">' . esc_html($total_line) . '</div>';
+		}
+		$html .= '</div>';
+		$html .= '<div class="cie-booking-detail__block">';
+		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--list"></div>';
+		$html .= '<div class="cie-booking-detail__line">' . esc_html__('Proyecto: ', 'cie-lab-booking') . esc_html($project_name !== '' ? $project_name : __('Sin especificar', 'cie-lab-booking')) . '</div>';
+		$html .= '<div class="cie-booking-detail__line">' . esc_html__('Responsable: ', 'cie-lab-booking') . esc_html($project_responsible !== '' ? $project_responsible : __('Sin especificar', 'cie-lab-booking')) . '</div>';
+		$html .= '</div>';
+		$html .= '</div>';
+
+		return $html;
+	}
+
+	/**
+	 * @param array<int,array{date:string,start:string,end:string,full_day:bool}> $occurrences
+	 * @return array<int,string>
+	 */
+	private static function booking_occurrence_lines(array $occurrences, int $max_days = 3): array {
+		$grouped = [];
+		foreach ($occurrences as $occurrence) {
+			$date = (string) ($occurrence['date'] ?? '');
+			if ($date === '') {
+				continue;
+			}
+			if (!isset($grouped[$date])) {
+				$grouped[$date] = [
+					'full_day' => false,
+					'slots' => [],
+				];
+			}
+			if (!empty($occurrence['full_day'])) {
+				$grouped[$date]['full_day'] = true;
+				continue;
+			}
+			$start = trim((string) ($occurrence['start'] ?? ''));
+			$end = trim((string) ($occurrence['end'] ?? ''));
+			if ($start !== '' && $end !== '') {
+				$grouped[$date]['slots'][$start . '-' . $end] = $start . ' - ' . $end;
+			}
+		}
+		$dates = array_keys($grouped);
+		sort($dates);
+		$lines = [];
+		foreach (array_slice($dates, 0, max(1, $max_days)) as $date) {
+			$label = self::format_date_with_weekday($date);
+			if (!empty($grouped[$date]['full_day'])) {
+				$lines[] = $label . ' · ' . __('Día completo', 'cie-lab-booking');
+			} else {
+				$slots = array_values((array) $grouped[$date]['slots']);
+				$lines[] = $label . ' · ' . ($slots ? implode(', ', $slots) : __('Horario pendiente', 'cie-lab-booking'));
+			}
+		}
+		if (count($dates) > max(1, $max_days)) {
+			$lines[] = sprintf(
+				/* translators: %d: hidden day count */
+				__('y %d día(s) más', 'cie-lab-booking'),
+				count($dates) - max(1, $max_days)
+			);
+		}
+		return $lines;
+	}
+
+	/**
+	 * @param array<int,array{date:string,start:string,end:string,full_day:bool}> $occurrences
+	 */
+	private static function booking_repeat_line(string $frequency, array $occurrences): string {
+		if ($frequency === Bookings::BOOKING_FREQUENCY_SINGLE || !$occurrences) {
+			return '';
+		}
+		$dates = array_values(array_filter(array_map(static function (array $occurrence): string {
+			return (string) ($occurrence['date'] ?? '');
+		}, $occurrences)));
+		if (!$dates) {
+			return '';
+		}
+		sort($dates);
+		$until = self::format_date_long((string) end($dates));
+		if ($frequency === Bookings::BOOKING_FREQUENCY_DAILY) {
+			return __('Repetición: Cada día', 'cie-lab-booking') . ', ' . __('hasta', 'cie-lab-booking') . ' ' . $until;
+		}
+		if ($frequency === Bookings::BOOKING_FREQUENCY_WEEKLY_REPEAT) {
+			return __('Repetición: Cada semana', 'cie-lab-booking') . ', ' . __('hasta', 'cie-lab-booking') . ' ' . $until;
+		}
+		if ($frequency === Bookings::BOOKING_FREQUENCY_BIWEEKLY_REPEAT) {
+			return __('Repetición: Semana salteada', 'cie-lab-booking') . ', ' . __('hasta', 'cie-lab-booking') . ' ' . $until;
 		}
 		return '';
+	}
+
+	/**
+	 * @param array<int,array{date:string,start:string,end:string,full_day:bool}> $occurrences
+	 */
+	private static function booking_total_line(array $occurrences, string $mode): string {
+		if (!$occurrences) {
+			return '';
+		}
+		$unique_dates = [];
+		$slot_count = 0;
+		$total_minutes = 0;
+		foreach ($occurrences as $occurrence) {
+			$date = (string) ($occurrence['date'] ?? '');
+			if ($date !== '') {
+				$unique_dates[$date] = true;
+			}
+			if (!empty($occurrence['full_day'])) {
+				continue;
+			}
+			$slot_count++;
+			$start_minutes = self::hm_to_minutes((string) ($occurrence['start'] ?? ''));
+			$end_minutes = self::hm_to_minutes((string) ($occurrence['end'] ?? ''));
+			if ($start_minutes >= 0 && $end_minutes > $start_minutes) {
+				$total_minutes += ($end_minutes - $start_minutes);
+			}
+		}
+		$days_count = count($unique_dates);
+		if ($mode === Bookings::BOOKING_MODE_FULL_DAY || $slot_count === 0) {
+			return sprintf(
+				/* translators: %d: total day count */
+				__('Total: %d día(s) reservados', 'cie-lab-booking'),
+				$days_count
+			);
+		}
+		$hours = $total_minutes > 0 ? rtrim(rtrim(number_format($total_minutes / 60, 2, '.', ''), '0'), '.') : '0';
+		return sprintf(
+			/* translators: 1: days, 2: slots, 3: hours */
+			__('Total: %1$d día(s) · %2$d bloque(s) · %3$s h', 'cie-lab-booking'),
+			$days_count,
+			$slot_count,
+			$hours
+		);
+	}
+
+	private static function hm_to_minutes(string $value): int {
+		if (!preg_match('/^\d{2}\:\d{2}$/', $value)) {
+			return -1;
+		}
+		$parts = explode(':', $value);
+		return ((int) $parts[0] * 60) + (int) $parts[1];
+	}
+
+	private static function format_date_with_weekday(string $ymd): string {
+		$ts = strtotime($ymd . ' 00:00:00');
+		if ($ts === false) {
+			return $ymd;
+		}
+		return wp_date('l, j \\d\\e F', $ts);
+	}
+
+	private static function format_date_long(string $ymd): string {
+		$ts = strtotime($ymd . ' 00:00:00');
+		if ($ts === false) {
+			return $ymd;
+		}
+		return wp_date('j \\d\\e F', $ts);
 	}
 
 	/**

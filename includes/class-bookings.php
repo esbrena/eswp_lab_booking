@@ -130,9 +130,6 @@ final class Bookings {
 
 			$today = gmdate('Y-m-d');
 			$max_date = gmdate('Y-m-d', strtotime('+12 months', strtotime($today . ' 00:00:00')));
-			if ($start < $today) {
-				$errors[] = __('La reserva solo permite fechas desde hoy.', 'cie-lab-booking');
-			}
 			if ($end > $max_date) {
 				$errors[] = __('La reserva solo permite fechas dentro de los próximos 12 meses.', 'cie-lab-booking');
 			}
@@ -228,6 +225,90 @@ final class Bookings {
 				'booking_selected_dates' => self::extract_selected_dates_from_raw($raw),
 				'occurrences' => $occurrences,
 			],
+		];
+	}
+
+	/**
+	 * Normalize schedule-only input (used in admin create/edit forms).
+	 *
+	 * @param array<string,mixed> $raw
+	 * @param array<int,string> &$errors
+	 * @return array{
+	 *   mode:string,
+	 *   frequency:string,
+	 *   day_scope:string,
+	 *   time_start:string,
+	 *   time_end:string,
+	 *   time_slots:array<int,string>,
+	 *   recurrence_weeks:int,
+	 *   weekdays:array<int,int>,
+	 *   selected_dates:array<int,string>,
+	 *   start_date:string,
+	 *   end_date:string,
+	 *   occurrences:array<int,array{date:string,start:string,end:string,full_day:bool}>
+	 * }
+	 */
+	public static function normalize_schedule_request(array $raw, array &$errors): array {
+		$mode = self::normalize_booking_mode((string) ($raw['booking_mode'] ?? self::BOOKING_MODE_FULL_DAY));
+		$frequency = self::normalize_booking_frequency((string) ($raw['booking_frequency'] ?? self::BOOKING_FREQUENCY_SINGLE));
+		$day_scope = self::normalize_booking_day_scope((string) ($raw['booking_day_scope'] ?? self::BOOKING_DAY_SCOPE_SINGLE));
+		$time_start = self::normalize_time_hm((string) ($raw['booking_time_start'] ?? '')) ?: '';
+		$time_end = self::normalize_time_hm((string) ($raw['booking_time_end'] ?? '')) ?: '';
+
+		$occurrences = self::build_occurrences_from_request($raw, $mode, $frequency, $time_start ?: null, $time_end ?: null, $errors);
+		$start = '';
+		$end = '';
+		if ($occurrences) {
+			$dates = array_map(
+				static function (array $occ): string {
+					return (string) ($occ['date'] ?? '');
+				},
+				$occurrences
+			);
+			sort($dates);
+			$start = (string) reset($dates);
+			$end = (string) end($dates);
+		}
+
+		$time_slots = self::serialize_time_slots(
+			array_values(
+				array_filter(
+					array_map(
+						static function (array $occ): array {
+							return [
+								'start' => (string) ($occ['start'] ?? ''),
+								'end' => (string) ($occ['end'] ?? ''),
+							];
+						},
+						array_values(
+							array_filter(
+								$occurrences,
+								static function (array $occ): bool {
+									return empty($occ['full_day']);
+								}
+							)
+						)
+					),
+					static function (array $slot): bool {
+						return $slot['start'] !== '' && $slot['end'] !== '';
+					}
+				)
+			)
+		);
+
+		return [
+			'mode' => $mode,
+			'frequency' => $frequency,
+			'day_scope' => $day_scope,
+			'time_start' => $time_start,
+			'time_end' => $time_end,
+			'time_slots' => $time_slots,
+			'recurrence_weeks' => max(1, min(self::get_max_recurrence_weeks(), (int) ($raw['booking_recurrence_weeks'] ?? 1))),
+			'weekdays' => self::normalize_weekdays((array) ($raw['booking_weekdays'] ?? [])),
+			'selected_dates' => self::extract_selected_dates_from_raw($raw),
+			'start_date' => $start,
+			'end_date' => $end,
+			'occurrences' => $occurrences,
 		];
 	}
 
@@ -930,6 +1011,16 @@ final class Bookings {
 			}
 		);
 		return $values;
+	}
+
+	/**
+	 * Public helper used by AJAX verification endpoint.
+	 *
+	 * @param array<int,array<string,mixed>> $occurrences
+	 * @return array<int,array{date:string,start:string,end:string,full_day:bool}>
+	 */
+	public static function sanitize_occurrences(array $occurrences): array {
+		return self::normalize_occurrences($occurrences);
 	}
 
 	/**

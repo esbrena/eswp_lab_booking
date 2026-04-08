@@ -12,6 +12,7 @@ final class Ajax {
 		add_action('wp_ajax_cie_lab_booking_availability', [self::class, 'availability']);
 		add_action('wp_ajax_cie_lab_booking_time_slots', [self::class, 'time_slots']);
 		add_action('wp_ajax_cie_lab_booking_resource_availability_calendar', [self::class, 'resource_availability_calendar']);
+		add_action('wp_ajax_cie_lab_booking_verify_reservation', [self::class, 'verify_reservation']);
 
 		// Calendar hover / click details (front + admin).
 		add_action('wp_ajax_cie_lab_booking_day_details', [self::class, 'day_details']);
@@ -177,6 +178,44 @@ final class Ajax {
 		]);
 	}
 
+	public static function verify_reservation(): void {
+		Util::require_booking_user();
+
+		if (!self::verify_any_nonce(['cie_lab_booking'])) {
+			wp_send_json_error(['message' => __('Nonce inválido.', 'cie-lab-booking')], 403);
+		}
+
+		$raw_occurrences = (string) ($_POST['occurrences'] ?? '[]');
+		$decoded = json_decode($raw_occurrences, true);
+		if (!is_array($decoded)) {
+			wp_send_json_error(['message' => __('No se han recibido ocurrencias válidas para verificar.', 'cie-lab-booking')], 400);
+		}
+
+		$occurrences = Bookings::sanitize_occurrences((array) $decoded);
+		if (!$occurrences) {
+			wp_send_json_error(['message' => __('No hay ocurrencias válidas para verificar.', 'cie-lab-booking')], 400);
+		}
+
+		$space_ids = array_values(array_filter(array_map('intval', (array) ($_POST['spaces'] ?? []))));
+		$equipment_ids = array_values(array_filter(array_map('intval', (array) ($_POST['equipment'] ?? []))));
+		if (!$space_ids && !$equipment_ids) {
+			wp_send_json_error(['message' => __('Debes seleccionar al menos un recurso para verificar la reserva.', 'cie-lab-booking')], 400);
+		}
+
+		$conflicts = Bookings::find_conflicts_for_occurrences($occurrences, $space_ids, $equipment_ids);
+		$has_conflicts = !empty($conflicts['spaces']) || !empty($conflicts['equipment']) || !empty($conflicts['blocked']);
+		if ($has_conflicts) {
+			wp_send_json_error([
+				'message' => __('Se han detectado conflictos con reservas validadas o bloqueos de mantenimiento.', 'cie-lab-booking'),
+				'conflicts' => $conflicts,
+			], 409);
+		}
+
+		wp_send_json_success([
+			'message' => __('Reserva verificada correctamente. No se han detectado conflictos.', 'cie-lab-booking'),
+		]);
+	}
+
 	public static function calendar_feed(): void {
 		if (!self::verify_any_nonce(['cie_lab_booking', 'cie_lab_booking_admin'])) {
 			wp_send_json_error(['message' => __('Nonce inválido.', 'cie-lab-booking')], 403);
@@ -191,6 +230,10 @@ final class Ajax {
 		$is_admin = current_user_can('manage_options');
 		$can_book = Util::current_user_can_book();
 		$user_id = get_current_user_id();
+		$booking_view = sanitize_key((string) ($_POST['booking_view'] ?? ''));
+		if (!in_array($booking_view, ['approved', 'pending', 'all'], true)) {
+			$booking_view = $is_admin ? 'approved' : 'all';
+		}
 		$calendar_scope = sanitize_key((string) ($_POST['calendar_scope'] ?? 'general'));
 		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
 			$calendar_scope = 'general';
@@ -203,6 +246,9 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			if ($is_admin && $calendar_scope === 'general') {
+				$bookings = self::filter_bookings_by_admin_view($bookings, $booking_view);
+			}
 			// Front users should always see their own pending/changing bookings in the global calendar.
 			if (!$is_admin && $user_id > 0) {
 				$user_extra = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
@@ -374,6 +420,10 @@ final class Ajax {
 		$is_admin = current_user_can('manage_options');
 		$can_book = Util::current_user_can_book();
 		$user_id = get_current_user_id();
+		$booking_view = sanitize_key((string) ($_POST['booking_view'] ?? ''));
+		if (!in_array($booking_view, ['approved', 'pending', 'all'], true)) {
+			$booking_view = $is_admin ? 'approved' : 'all';
+		}
 		$calendar_scope = sanitize_key((string) ($_POST['calendar_scope'] ?? 'general'));
 		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
 			$calendar_scope = 'general';
@@ -386,6 +436,9 @@ final class Ajax {
 			$bookings = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 		} else {
 			$bookings = Bookings::get_overlapping_bookings_for_calendar($start, $end, $is_admin);
+			if ($is_admin && $calendar_scope === 'general') {
+				$bookings = self::filter_bookings_by_admin_view($bookings, $booking_view);
+			}
 			if (!$is_admin && $user_id > 0) {
 				$user_extra = Bookings::get_overlapping_user_bookings_for_calendar($start, $end, (int) $user_id);
 				$by_id = [];
@@ -570,6 +623,30 @@ final class Ajax {
 			return !empty($resource_names) ? (string) $resource_names[0] : (string) __('Reserva de equipo', 'cie-lab-booking');
 		}
 		return (string) __('Reserva', 'cie-lab-booking');
+	}
+
+	/**
+	 * @param array<int,\WP_Post> $bookings
+	 * @return array<int,\WP_Post>
+	 */
+	private static function filter_bookings_by_admin_view(array $bookings, string $view): array {
+		if ($view === 'all') {
+			return $bookings;
+		}
+
+		$out = [];
+		foreach ($bookings as $booking) {
+			$status = (string) get_post_meta((int) $booking->ID, '_cie_booking_status', true);
+			if ($view === 'approved' && $status === Post_Types::BOOKING_STATUS_APPROVED) {
+				$out[] = $booking;
+				continue;
+			}
+			if ($view === 'pending' && in_array($status, [Post_Types::BOOKING_STATUS_PENDING, Post_Types::BOOKING_STATUS_CHANGES], true)) {
+				$out[] = $booking;
+			}
+		}
+
+		return $out;
 	}
 }
 
