@@ -65,6 +65,39 @@
     return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
   }
 
+  function datesAreConsecutive(dates) {
+    var items = normalizeYmdList(dates);
+    if (items.length < 2) return true;
+    for (var i = 1; i < items.length; i++) {
+      var prev = parseYmd(items[i - 1]);
+      var curr = parseYmd(items[i]);
+      if (!prev || !curr) return false;
+      var expected = addDays(prev, 1);
+      if (toYmd(expected) !== toYmd(curr)) return false;
+    }
+    return true;
+  }
+
+  function formatCompactFullDayRange(startYmd, endYmd) {
+    var start = parseYmd(startYmd);
+    var end = parseYmd(endYmd);
+    if (!start || !end || end < start) {
+      return formatDayMonth(startYmd) + ' a ' + formatDayMonth(endYmd) + ' · Día completo';
+    }
+    var sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+    if (sameMonth) {
+      return (
+        String(start.getDate()) +
+        ' a ' +
+        String(end.getDate()) +
+        ' de ' +
+        end.toLocaleDateString('es-ES', { month: 'long' }) +
+        ' · Día completo'
+      );
+    }
+    return formatDayMonth(startYmd) + ' a ' + formatDayMonth(endYmd) + ' · Día completo';
+  }
+
   function normalizeYmdList(values) {
     var map = {};
     (Array.isArray(values) ? values : []).forEach(function (value) {
@@ -183,6 +216,13 @@
       }
     });
     var dates = Object.keys(grouped).sort();
+    var allFullDay = dates.length > 0 && dates.every(function (date) { return grouped[date].fullDay; });
+    if (allFullDay && dates.length > 1 && datesAreConsecutive(dates)) {
+      return {
+        dates: dates,
+        lines: [formatCompactFullDayRange(dates[0], dates[dates.length - 1])]
+      };
+    }
     var lines = [];
     var limit = parseInt(String(maxDays || '3'), 10);
     if (!limit || limit < 1) limit = 1;
@@ -199,6 +239,23 @@
       lines.push('y ' + (dates.length - limit) + ' día(s) más');
     }
     return { dates: dates, lines: lines };
+  }
+
+  function bookingTypeLabel(type) {
+    if (type === 'equipment') return 'Equipos';
+    if (type === 'combined') return 'Equipos + Espacios';
+    return 'Espacios';
+  }
+
+  function bookingTypeBadge(type) {
+    var safe = (type === 'equipment' || type === 'combined') ? type : 'space';
+    return (
+      '<span class="cie-booking-type-badge cie-booking-type-badge--' +
+      escapeHtml(safe) +
+      '">' +
+      escapeHtml(bookingTypeLabel(safe)) +
+      '</span>'
+    );
   }
 
   function repeatLineFromFrequency(frequency, dates) {
@@ -239,6 +296,7 @@
 
   function renderBookingDetailCard(data) {
     var title = String((data && data.title) || '').trim();
+    var bookingType = String((data && data.bookingType) || 'space').trim();
     var projectName = String((data && data.projectName) || '').trim();
     var projectResponsible = String((data && data.projectResponsible) || '').trim();
     var lines = Array.isArray(data && data.occurrenceLines) ? data.occurrenceLines : [];
@@ -247,7 +305,10 @@
     var fallback = String((data && data.fallbackLine) || '').trim();
 
     var html = '<div class="cie-booking-detail">';
-    html += '<div class="cie-booking-detail__title">' + escapeHtml(title || 'Reserva') + '</div>';
+    html += '<div class="cie-booking-detail__title">';
+    html += '<span class="cie-booking-detail__title-text">' + escapeHtml(title || 'Reserva') + '</span>';
+    html += bookingTypeBadge(bookingType);
+    html += '</div>';
     html += '<div class="cie-booking-detail__block">';
     html += '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock"></div>';
     if (lines.length) {
@@ -280,6 +341,7 @@
     if (!title && safeBooking.id) title = 'Reserva #' + safeBooking.id;
     return {
       title: title || 'Reserva',
+      bookingType: String(safeBooking.type || safeBooking.resourceType || 'space'),
       occurrenceLines: summarized.lines,
       repeatLine: repeatLineFromFrequency(String(safeBooking.frequency || 'single'), summarized.dates),
       totalLine: totalLineFromOccurrences(occurrences, String(safeBooking.mode || '')),
@@ -449,8 +511,7 @@
         return;
       }
       var booking = response.data;
-      var html = '<h4>Detalle de reserva</h4>';
-      html += '<p><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></p>';
+      var html = '<div class="cie-booking-modal-header"><h4>Detalle de reserva</h4><span class="cie-status-tag cie-status-tag--' + escapeHtml(statusSlug(booking.status)) + '">' + escapeHtml(statusLabel(booking.status)) + '</span></div>';
       html += renderBookingDetailCard(buildDetailDataFromBooking(booking, 4));
       $modal.find('.cie-modal__content').html(html);
     }).fail(function () {
@@ -789,6 +850,8 @@
       var mode = selectedMode();
       var frequency = selectedFrequency();
       var dayScope = selectedDayScope();
+      var installType = selectedInstallationType();
+      var bookingType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
       var start = String($flow.find('input[name="start_date"]').val() || '').trim();
       var end = String($flow.find('input[name="end_date"]').val() || '').trim();
       var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
@@ -817,6 +880,7 @@
       }
       var html = renderBookingDetailCard({
         title: title,
+        bookingType: bookingType,
         occurrenceLines: summarized.lines,
         repeatLine: repeatLineFromFrequency(frequency, summarized.dates),
         totalLine: totalLineFromOccurrences(occurrences, mode),

@@ -53,6 +53,11 @@
   border-collapse: collapse;
 }
 
+.cie-table--my-bookings td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .cie-table th,
 .cie-table td {
   padding: 10px 10px;
@@ -110,6 +115,28 @@
   background: #f1f5f9;
   border-color: #94a3b8;
   color: #334155;
+}
+
+.cie-booking-list-item {
+  position: relative;
+  padding-right: 132px;
+}
+
+.cie-booking-list-item__status {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.cie-booking-list-item__status-meta {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.cie-booking-list-item__status-meta small {
+  color: #64748b;
+  font-size: 12px;
 }
 
 .cie-native-tabs {
@@ -1299,9 +1326,53 @@ select {
 }
 
 .cie-booking-detail__title {
-  font-size: 14px;
-  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.2;
   color: #0f172a;
+}
+
+.cie-booking-detail__title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cie-booking-type-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cie-booking-type-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 8px;
+  background: #64748b;
+}
+
+.cie-booking-type-badge--space::before {
+  background: #f59e0b;
+}
+
+.cie-booking-type-badge--equipment::before {
+  background: #3b82f6;
+}
+
+.cie-booking-type-badge--combined::before {
+  background: #16a34a;
 }
 
 .cie-booking-detail__block {
@@ -1349,6 +1420,22 @@ select {
 
 .cie-booking-detail__line--preview {
   color: #0ea5e9;
+}
+
+.cie-booking-modal-header {
+  position: relative;
+  padding-right: 130px;
+  margin-bottom: 10px;
+}
+
+.cie-booking-modal-header h4 {
+  margin: 0;
+}
+
+.cie-booking-modal-header .cie-status-tag {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 
 .resumen-reserva[data-cie-resumen-step2] .cie-btn {
