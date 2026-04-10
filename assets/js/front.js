@@ -671,7 +671,11 @@
     }
 
     function selectedDayScope() {
-      return String($flow.find('input[name="booking_day_scope"]:checked').val() || 'single_day');
+      var scope = String($flow.find('[name="booking_day_scope"]').first().val() || 'date_range');
+      if (scope !== 'single_day' && scope !== 'date_range' && scope !== 'loose_days') {
+        return 'date_range';
+      }
+      return scope;
     }
 
     function selectedInstallationType() {
@@ -869,7 +873,9 @@
       var projectName = String($flow.find('input[name="project_name"]').val() || '').trim();
       var projectResponsible = String($flow.find('input[name="project_responsible"]').val() || '').trim();
       var fallbackLine = '';
-      var previewNotice = '';
+      if (!end && start) {
+        end = start;
+      }
       if (!dates.length) {
         fallbackLine = 'Seleccione los días de la reserva.';
       } else if (mode === 'time_range' && !slots.length) {
@@ -888,10 +894,6 @@
         projectResponsible: projectResponsible,
         fallbackLine: fallbackLine
       });
-      if (dates.length) {
-        previewNotice = '<div class="cie-booking-detail__line cie-booking-detail__line--preview">Previsualización activa en calendario</div>';
-      }
-      html += previewNotice;
       $flow.find('[data-cie-notice="schedule"]').html(html).show();
     }
 
@@ -1126,38 +1128,7 @@
       if (!$scheduler.length) return;
       var api = $scheduler.data('cieSchedulerApi');
       if (!api || typeof api.setPreviewReservation !== 'function') return;
-      var phase = currentPhase();
-      if (phase === 'resources') {
-        api.setPreviewReservation(null);
-        return;
-      }
-      var mode = selectedMode();
-      var frequency = selectedFrequency();
-      var dayScope = selectedDayScope();
-      var start = String($flow.find('input[name="start_date"]').val() || '').trim();
-      var end = String($flow.find('input[name="end_date"]').val() || '').trim();
-      var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
-      var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
-      var slots = selectedTimeSlots();
-      var names = selectedResourceNames();
-      var baseDates = [];
-      if (dayScope === 'single_day') baseDates = normalizeYmdList([start]);
-      else if (dayScope === 'date_range') baseDates = buildDateRange(start, end);
-      else baseDates = parseManualDates(manual);
-      var dates = expandDatesForFrequency(baseDates, dayScope, frequency, weeks);
-      var occurrences = buildOccurrencesFromDatesAndSlots(mode, dates, slots);
-      var installType = selectedInstallationType();
-      var resourceType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
-      if (!occurrences.length) {
-        api.setPreviewReservation(null);
-        return;
-      }
-      api.setPreviewReservation({
-        title: names.length ? ('Previsualización: ' + names.join(', ')) : 'Previsualización de reserva',
-        resources: names,
-        resourceType: resourceType,
-        occurrences: occurrences
-      });
+      api.setPreviewReservation(null);
     }
 
     function showResourcesRequiredNotice() {
@@ -1176,6 +1147,9 @@
       var dayScope = selectedDayScope();
       var start = String($flow.find('input[name="start_date"]').val() || '').trim();
       var end = String($flow.find('input[name="end_date"]').val() || '').trim();
+      if (!end && start) {
+        end = start;
+      }
       var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
       var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
       var slots = selectedTimeSlots();
@@ -1198,17 +1172,21 @@
     var verifyXhr = null;
     function verifyReservationAndContinue() {
       var payload = buildVerificationPayload();
-      var $notice = $flow.find('[data-cie-notice="verification-status"]');
+      var $notice = $flow.find('[data-cie-notice="planning-verification"]');
+      var $detailsNotice = $flow.find('[data-cie-notice="verification-status"]');
       if (!payload.spaces.length && !payload.equipment.length) {
         $notice.removeClass('is-info is-success').addClass('is-error').text('Debes seleccionar al menos un recurso antes de verificar.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('Debes seleccionar al menos un recurso antes de verificar.');
         return;
       }
       if (!payload.occurrences.length) {
         $notice.removeClass('is-info is-success').addClass('is-error').text('No hay ocurrencias para verificar. Revisa fechas y franjas horarias.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('No hay ocurrencias para verificar. Revisa fechas y franjas horarias.');
         return;
       }
       if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
         $notice.removeClass('is-info is-success').addClass('is-error').text('No se ha podido lanzar la verificación.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('No se ha podido lanzar la verificación.');
         return;
       }
       if (verifyXhr && verifyXhr.abort) verifyXhr.abort();
@@ -1223,9 +1201,11 @@
         if (!response || !response.success || !response.data) {
           var message = (response && response.data && response.data.message) ? String(response.data.message) : 'No se pudo verificar la reserva.';
           $notice.removeClass('is-info is-success').addClass('is-error').text(message);
+          $detailsNotice.removeClass('is-info is-success').addClass('is-error').text(message);
           return;
         }
         $notice.removeClass('is-info is-error').addClass('is-success').text(String(response.data.message || 'La reserva no tiene conflictos.'));
+        $detailsNotice.removeClass('is-info is-error').addClass('is-success').text(String(response.data.message || 'La reserva no tiene conflictos.'));
         setPhase('details');
         var $details = $flow.find('[data-cie-phase="details"]');
         if ($details.length) {
@@ -1233,6 +1213,7 @@
         }
       }).fail(function () {
         $notice.removeClass('is-info is-success').addClass('is-error').text('No se pudo verificar la reserva.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('No se pudo verificar la reserva.');
       });
     }
 
