@@ -14,6 +14,10 @@
     return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
   }
 
+  function isYmd(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+  }
+
   function toYmd(date) {
     return (
       date.getFullYear() +
@@ -662,6 +666,43 @@
     var maxRangeDays = parseInt(String($flow.attr('data-cie-max-range-days') || '5'), 10);
     if (!maxRangeDays || maxRangeDays < 1) maxRangeDays = 5;
 
+    function setDateInputValue($input, value) {
+      var nextValue = String(value || '').trim();
+      if (!$input || !$input.length || !isYmd(nextValue)) return;
+      if (String($input.val() || '').trim() === nextValue) return;
+      var input = $input.get(0);
+      if (input && input._flatpickr) {
+        input._flatpickr.setDate(nextValue, true, 'Y-m-d');
+        return;
+      }
+      $input.val(nextValue).trigger('change');
+    }
+
+    function normalizeDateRangeInputs() {
+      var $startInput = $flow.find('input[name="start_date"]').first();
+      var $endInput = $flow.find('input[name="end_date"]').first();
+      if (!$startInput.length || !$endInput.length) return;
+      var startValue = String($startInput.val() || '').trim();
+      var endValue = String($endInput.val() || '').trim();
+      var startDate = parseYmd(startValue);
+      var endDate = parseYmd(endValue);
+      if (!startDate) return;
+      if (!endValue) {
+        setDateInputValue($endInput, toYmd(startDate));
+        return;
+      }
+      if (!endDate) return;
+      if (endDate < startDate) {
+        endDate = new Date(startDate.getTime());
+        setDateInputValue($endInput, toYmd(startDate));
+      }
+      var diff = Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+      if (diff > maxRangeDays) {
+        var capped = addDays(startDate, maxRangeDays - 1);
+        setDateInputValue($endInput, toYmd(capped));
+      }
+    }
+
     function selectedMode() {
       return String($flow.find('[name="booking_mode"]').val() || 'full_day');
     }
@@ -858,6 +899,12 @@
       var bookingType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
       var start = String($flow.find('input[name="start_date"]').val() || '').trim();
       var end = String($flow.find('input[name="end_date"]').val() || '').trim();
+      if (!end && start) {
+        end = start;
+      }
+      if (isYmd(start) && isYmd(end) && end < start) {
+        end = start;
+      }
       var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
       var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
       var slots = selectedTimeSlots();
@@ -1150,6 +1197,9 @@
       if (!end && start) {
         end = start;
       }
+      if (isYmd(start) && isYmd(end) && end < start) {
+        end = start;
+      }
       var weeks = parseInt(String($flow.find('input[name="booking_recurrence_weeks"]').val() || '1'), 10);
       var manual = String($flow.find('input[name="booking_dates_raw"]').val() || '').trim();
       var slots = selectedTimeSlots();
@@ -1180,8 +1230,8 @@
         return;
       }
       if (!payload.occurrences.length) {
-        $notice.removeClass('is-info is-success').addClass('is-error').text('No hay ocurrencias para verificar. Revisa fechas y franjas horarias.');
-        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('No hay ocurrencias para verificar. Revisa fechas y franjas horarias.');
+        $notice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
         return;
       }
       if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
@@ -1199,7 +1249,7 @@
         equipment: payload.equipment
       }).done(function (response) {
         if (!response || !response.success || !response.data) {
-          var message = (response && response.data && response.data.message) ? String(response.data.message) : 'No se pudo verificar la reserva.';
+          var message = (response && response.data && response.data.message) ? String(response.data.message) : 'La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.';
           $notice.removeClass('is-info is-success').addClass('is-error').text(message);
           $detailsNotice.removeClass('is-info is-success').addClass('is-error').text(message);
           return;
@@ -1212,8 +1262,8 @@
           $('html, body').animate({ scrollTop: Math.max(0, $details.offset().top - 30) }, 200);
         }
       }).fail(function () {
-        $notice.removeClass('is-info is-success').addClass('is-error').text('No se pudo verificar la reserva.');
-        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('No se pudo verificar la reserva.');
+        $notice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
       });
     }
 
@@ -1248,6 +1298,7 @@
       } else {
         applyEquipmentDependencies();
       }
+      normalizeDateRangeInputs();
       if (mode !== 'time_range') {
         $flow.find('input[name="booking_time_slots[]"]').prop('checked', false);
       }
@@ -1258,15 +1309,7 @@
         $flow.find('input[name="booking_recurrence_weeks"]').val(String(maxWeeks));
       }
       if (dayScope === 'date_range') {
-        var start = parseYmd(String($flow.find('input[name="start_date"]').val() || ''));
-        var end = parseYmd(String($flow.find('input[name="end_date"]').val() || ''));
-        if (start && end) {
-          var diff = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-          if (diff > maxRangeDays) {
-            var cap = addDays(start, maxRangeDays - 1);
-            $flow.find('input[name="end_date"]').val(toYmd(cap));
-          }
-        }
+        normalizeDateRangeInputs();
       }
 
       applyResourceSearch();
@@ -1378,6 +1421,39 @@
       var $chip = $(this).closest('.cie-slot-chip');
       $chip.toggleClass('is-selected', $(this).is(':checked'));
       updateScheduleNotice();
+    });
+    var $form = $flow.closest('form');
+    $form.on('submit', function (event) {
+      var $currentForm = $(this);
+      if ($currentForm.data('cieFinalValidationOk') === '1') {
+        return;
+      }
+      event.preventDefault();
+      var payload = buildVerificationPayload();
+      var $detailsNotice = $flow.find('[data-cie-notice="verification-status"]');
+      if (!payload.occurrences.length || (!payload.spaces.length && !payload.equipment.length)) {
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
+        return;
+      }
+      $detailsNotice.removeClass('is-error is-success').addClass('is-info').text('Validando disponibilidad antes de confirmar la reserva...');
+      $.post(window.CieLabBooking.ajaxUrl, {
+        action: 'cie_lab_booking_verify_reservation',
+        nonce: window.CieLabBooking.nonce,
+        occurrences: JSON.stringify(payload.occurrences),
+        spaces: payload.spaces,
+        equipment: payload.equipment
+      }).done(function (response) {
+        if (!response || !response.success || !response.data) {
+          var errorMessage = (response && response.data && response.data.message) ? String(response.data.message) : 'La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.';
+          $detailsNotice.removeClass('is-info is-success').addClass('is-error').text(errorMessage);
+          return;
+        }
+        $detailsNotice.removeClass('is-info is-error').addClass('is-success').text(String(response.data.message || 'Disponibilidad confirmada. Enviando reserva...'));
+        $currentForm.data('cieFinalValidationOk', '1');
+        $currentForm.get(0).submit();
+      }).fail(function () {
+        $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
+      });
     });
     setPhase('resources');
     applyResourceSearch();

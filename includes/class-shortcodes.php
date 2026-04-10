@@ -155,7 +155,7 @@ final class Shortcodes {
 			}
 		}
 
-		if ($posted_end === '') {
+		if ($posted_end === '' || $posted_end < $posted_start) {
 			$posted_end = $posted_start;
 			$_POST['end_date'] = $posted_end;
 		}

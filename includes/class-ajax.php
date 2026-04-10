@@ -212,7 +212,7 @@ final class Ajax {
 		}
 
 		wp_send_json_success([
-			'message' => __('Reserva verificada correctamente. No se han detectado conflictos.', 'cie-lab-booking'),
+			'message' => __('La disponibilidad es válida.', 'cie-lab-booking'),
 		]);
 	}
 

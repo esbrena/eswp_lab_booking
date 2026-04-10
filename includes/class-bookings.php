@@ -170,6 +170,13 @@ final class Bookings {
 		// Apply equipment dependency rules (server-side).
 		$equipment = self::apply_equipment_dependencies($equipment, $errors);
 
+		if ($occurrences && ($spaces || $equipment)) {
+			$conflicts = self::find_conflicts_for_occurrences($occurrences, $spaces, $equipment);
+			if (!empty($conflicts['spaces']) || !empty($conflicts['equipment']) || !empty($conflicts['blocked'])) {
+				$errors[] = __('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.', 'cie-lab-booking');
+			}
+		}
+
 		if (!$start || !$end || !$occurrences) {
 			return ['ok' => false, 'errors' => $errors];
 		}
