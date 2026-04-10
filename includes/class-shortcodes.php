@@ -669,20 +669,6 @@ final class Shortcodes {
 			<?php echo self::render_action_notice($action_notice); ?>
 
 			<div id="<?php echo esc_attr($uid); ?>" class="cie-inline-tabs" data-cie-inline-tabs>
-				<style>
-					/* Inline tabs CSS (scoped to this shortcode instance) */
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__bar{display:flex;gap:8px;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{padding:8px 12px;cursor:pointer;font-weight:800;font-size:1rem;user-select:none; color:gray;background:white !important; border-radius:0px !important; border:none !important;}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab.is-active{border-bottom:4px black solid !important; color:black;} .cie-inline-tabs__tab:hover { background:#eeeeee !important;}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{margin-left:auto;display:none;padding:8px 10px;border-radius:10px;border:1px solid rgba(15,23,42,.2);background:#fff}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel{display:none}
-					#<?php echo esc_html($uid); ?> .cie-inline-tabs__panel.is-active{display:block}
-					@media (max-width:640px){
-						#<?php echo esc_html($uid); ?> .cie-inline-tabs__tab{display:none}
-						#<?php echo esc_html($uid); ?> .cie-inline-tabs__select{display:block}
-					}
-				</style>
-
 				<div class="cie-inline-tabs__bar" role="tablist" aria-label="<?php echo esc_attr__('Mis reservas', 'cie-lab-booking'); ?>">
 					<button type="button" class="cie-inline-tabs__tab is-active" role="tab" aria-selected="true" data-tab="current">
 						<?php echo esc_html__('Reservas en curso', 'cie-lab-booking'); ?>
@@ -996,7 +982,7 @@ final class Shortcodes {
 
 		ob_start();
 		?>
-		<table class="cie-table">
+		<table class="cie-table cie-table--my-bookings">
 			<tbody>
 			<?php foreach ($bookings as $b): ?>
 				<?php
@@ -1020,27 +1006,30 @@ final class Shortcodes {
 				$can_delete = !in_array($status, [Post_Types::BOOKING_STATUS_CANCELLED, Post_Types::BOOKING_STATUS_REJECTED], true);
 				?>
 				<tr>
-					<!-- <td><?php echo esc_html($start . ' - ' . $end); ?></td> -->
-					<td>
-						<?php
-						if ($schedule_detail_html !== '') {
-							echo $schedule_detail_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-						} else {
-							echo '<strong>' . esc_html(self::resources_summary($spaces, $equipment)) . '</strong><br/><small>' . esc_html($start . ' - ' . $end) . '</small>';
-						}
-						?>
-					</td>
-					<td width="200px;">
-						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr($status_slug); ?>">
-							<?php echo esc_html(self::status_label($status)); ?>
-						</span>
+					<td class="cie-booking-list-item-cell">
+						<div class="cie-booking-list-item">
+							<div class="cie-booking-list-item__status">
+								<span class="cie-status-tag cie-status-tag--<?php echo esc_attr($status_slug); ?>">
+									<?php echo esc_html(self::status_label($status)); ?>
+								</span>
+							</div>
+							<?php
+							if ($schedule_detail_html !== '') {
+								echo $schedule_detail_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+							} else {
+								echo '<strong>' . esc_html(self::resources_summary($spaces, $equipment)) . '</strong><br/><small>' . esc_html($start . ' - ' . $end) . '</small>';
+							}
+							?>
+						</div>
 						<?php if ($status === Post_Types::BOOKING_STATUS_CHANGES): ?>
+							<div class="cie-booking-list-item__status-meta">
 							<?php if (!$show_actions): ?>
-								<br/><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
+								<a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html__('Editar y reenviar', 'cie-lab-booking'); ?></a>
 							<?php endif; ?>
 							<?php if ($admin_message): ?>
-								<br/><small><?php echo esc_html($admin_message); ?></small>
+								<small><?php echo esc_html($admin_message); ?></small>
 							<?php endif; ?>
+							</div>
 						<?php endif; ?>
 					</td>
 					<?php if ($show_actions): ?>
@@ -1105,6 +1094,7 @@ final class Shortcodes {
 		$frequency = sanitize_key((string) get_post_meta($booking_id, '_cie_booking_frequency', true));
 		$spaces = (array) get_post_meta($booking_id, '_cie_booking_spaces', true);
 		$equipment = (array) get_post_meta($booking_id, '_cie_booking_equipment', true);
+		$booking_type = self::booking_type_from_resources($spaces, $equipment);
 		$resource_title = self::resources_summary($spaces, $equipment);
 		if ($resource_title === '') {
 			$resource_title = sprintf(__('Reserva #%d', 'cie-lab-booking'), $booking_id);
@@ -1117,7 +1107,10 @@ final class Shortcodes {
 		$total_line = self::booking_total_line($occurrences, $mode);
 
 		$html = '<div class="cie-booking-detail">';
-		$html .= '<div class="cie-booking-detail__title">' . esc_html($resource_title) . '</div>';
+		$html .= '<div class="cie-booking-detail__title">';
+		$html .= '<span class="cie-booking-detail__title-text">' . esc_html($resource_title) . '</span>';
+		$html .= self::booking_type_badge_html($booking_type);
+		$html .= '</div>';
 		$html .= '<div class="cie-booking-detail__block">';
 		$html .= '<div class="cie-booking-detail__block-title cie-booking-detail__block-title--clock"></div>';
 		if ($occurrence_lines) {
@@ -1171,6 +1164,18 @@ final class Shortcodes {
 		}
 		$dates = array_keys($grouped);
 		sort($dates);
+		$all_full_day = !empty($dates);
+		foreach ($dates as $date) {
+			if (empty($grouped[$date]['full_day'])) {
+				$all_full_day = false;
+				break;
+			}
+		}
+		if ($all_full_day && count($dates) > 1 && self::dates_are_consecutive($dates)) {
+			return [
+				self::format_compact_full_day_range((string) $dates[0], (string) end($dates)),
+			];
+		}
 		$lines = [];
 		foreach (array_slice($dates, 0, max(1, $max_days)) as $date) {
 			$label = self::format_date_with_weekday($date);
@@ -1189,6 +1194,55 @@ final class Shortcodes {
 			);
 		}
 		return $lines;
+	}
+
+	/**
+	 * @param array<int,string> $dates
+	 */
+	private static function dates_are_consecutive(array $dates): bool {
+		if (count($dates) < 2) {
+			return true;
+		}
+		$cursor = strtotime($dates[0] . ' 00:00:00');
+		if ($cursor === false) {
+			return false;
+		}
+		for ($i = 1; $i < count($dates); $i++) {
+			$expected = strtotime('+1 day', $cursor);
+			$current = strtotime($dates[$i] . ' 00:00:00');
+			if ($expected === false || $current === false || $expected !== $current) {
+				return false;
+			}
+			$cursor = $current;
+		}
+		return true;
+	}
+
+	private static function format_compact_full_day_range(string $start_ymd, string $end_ymd): string {
+		$start_ts = strtotime($start_ymd . ' 00:00:00');
+		$end_ts = strtotime($end_ymd . ' 00:00:00');
+		if ($start_ts === false || $end_ts === false || $end_ts < $start_ts) {
+			return self::format_date_long($start_ymd) . ' - ' . self::format_date_long($end_ymd) . ' · ' . __('Dia completo', 'cie-lab-booking');
+		}
+		$same_month = wp_date('n', $start_ts) === wp_date('n', $end_ts)
+			&& wp_date('Y', $start_ts) === wp_date('Y', $end_ts);
+		if ($same_month) {
+			$range = sprintf(
+				/* translators: 1: start day number, 2: end day number, 3: month name */
+				__('%1$s a %2$s de %3$s', 'cie-lab-booking'),
+				wp_date('j', $start_ts),
+				wp_date('j', $end_ts),
+				wp_date('F', $end_ts)
+			);
+		} else {
+			$range = sprintf(
+				/* translators: 1: start date, 2: end date */
+				__('%1$s a %2$s', 'cie-lab-booking'),
+				self::format_date_long($start_ymd),
+				self::format_date_long($end_ymd)
+			);
+		}
+		return $range . ' · ' . __('Día completo', 'cie-lab-booking');
 	}
 
 	/**
@@ -1339,6 +1393,43 @@ final class Shortcodes {
 			}
 		}
 		return implode(', ', $names);
+	}
+
+	/**
+	 * @param array<int|string> $spaces
+	 * @param array<int|string> $equipment
+	 */
+	private static function booking_type_from_resources(array $spaces, array $equipment): string {
+		$has_space = !empty(array_values(array_filter(array_map('intval', $spaces))));
+		$has_equipment = !empty(array_values(array_filter(array_map('intval', $equipment))));
+		if ($has_space && $has_equipment) {
+			return 'combined';
+		}
+		if ($has_equipment) {
+			return 'equipment';
+		}
+		return 'space';
+	}
+
+	private static function booking_type_label(string $booking_type): string {
+		if ($booking_type === 'equipment') {
+			return (string) __('Equipos', 'cie-lab-booking');
+		}
+		if ($booking_type === 'combined') {
+			return (string) __('Equipos + Espacios', 'cie-lab-booking');
+		}
+		return (string) __('Espacios', 'cie-lab-booking');
+	}
+
+	private static function booking_type_badge_html(string $booking_type): string {
+		$safe_type = in_array($booking_type, ['space', 'equipment', 'combined'], true)
+			? $booking_type
+			: 'space';
+		return sprintf(
+			'<span class="cie-booking-type-badge cie-booking-type-badge--%1$s">%2$s</span>',
+			esc_attr($safe_type),
+			esc_html(self::booking_type_label($safe_type))
+		);
 	}
 
 	/**

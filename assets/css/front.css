@@ -59,6 +59,11 @@
   padding-bottom: 12px;
 }
 
+.cie-table--my-bookings td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .cie-table th,
 .cie-table td {
   padding: 10px 10px;
