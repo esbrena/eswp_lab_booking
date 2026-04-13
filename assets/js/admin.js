@@ -400,12 +400,14 @@
     var $modal = ensureModal();
     $modal.find('.cie-modal__content').html('<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4><p>Cargando...</p>');
     $modal.show();
+    var resourceFilter = (filters && filters.resourceName) ? String(filters.resourceName) : 'all';
     if (!window.CieLabBookingAdmin || !window.CieLabBookingAdmin.ajaxUrl) return;
     $.post(window.CieLabBookingAdmin.ajaxUrl, {
       action: 'cie_lab_booking_day_details',
       nonce: window.CieLabBookingAdmin.nonce,
       date: date,
       calendar_scope: scope || 'general',
+      filter_resource: resourceFilter,
       booking_view: (filters && filters.bookingView) ? String(filters.bookingView) : 'approved'
     }).done(function (response) {
       if (!response || !response.success || !response.data) {
@@ -415,7 +417,6 @@
       var data = response.data;
       var bookings = Array.isArray(data.bookings) ? data.bookings : [];
       var blocks = Array.isArray(data.blocks) ? data.blocks : [];
-      var resourceFilter = (filters && filters.resourceName) ? String(filters.resourceName) : 'all';
       var typeFilter = (filters && filters.resourceType) ? String(filters.resourceType) : 'all';
       if (typeFilter !== 'all') {
         bookings = bookings.filter(function (booking) {
@@ -428,9 +429,13 @@
           return resources.indexOf(resourceFilter) !== -1;
         });
         blocks = blocks.filter(function (block) {
-          if (block.isGlobal) return true;
+          if (block.isGlobal) return false;
           if (!Array.isArray(block.resources)) return false;
           return block.resources.indexOf(resourceFilter) !== -1;
+        });
+      } else {
+        blocks = blocks.filter(function (block) {
+          return !!block.isGlobal;
         });
       }
       var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
@@ -545,9 +550,15 @@
         if (state.filterType !== 'all' && event.type === 'booking' && String(event.resourceType || 'space') !== state.filterType) {
           return false;
         }
+        if (event.type === 'block') {
+          if (state.filterResource === 'all') {
+            return !!event.isGlobal;
+          }
+          var blockNames = Array.isArray(event.resources) ? event.resources : [];
+          return blockNames.indexOf(state.filterResource) !== -1;
+        }
         if (state.filterResource !== 'all') {
           var names = Array.isArray(event.resources) ? event.resources : [];
-          if (event.type === 'block' && event.isGlobal) return true;
           if (names.indexOf(state.filterResource) === -1) return false;
         }
         return true;
@@ -689,6 +700,7 @@
         start_date: range.start,
         end_date: range.end,
         calendar_scope: scope,
+        filter_resource: state.filterResource,
         booking_view: state.bookingView
       }).done(function (response) {
         if (!response || !response.success || !response.data || !Array.isArray(response.data.events)) {

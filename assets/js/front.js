@@ -537,7 +537,8 @@
       action: 'cie_lab_booking_day_details',
       nonce: window.CieLabBooking.nonce,
       date: date,
-      calendar_scope: scope || 'general'
+      calendar_scope: scope || 'general',
+      filter_resource: (filters && filters.resourceName) ? String(filters.resourceName) : 'all'
     }).done(function (response) {
       if (!response || !response.success || !response.data) {
         $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
@@ -562,9 +563,13 @@
           return resources.indexOf(resourceFilter) !== -1;
         });
         blocks = blocks.filter(function (block) {
-          if (block.isGlobal) return true;
+          if (block.isGlobal) return false;
           if (!Array.isArray(block.resources)) return false;
           return block.resources.indexOf(resourceFilter) !== -1;
+        });
+      } else {
+        blocks = blocks.filter(function (block) {
+          return !!block.isGlobal;
         });
       }
       bookings.sort(function (a, b) {
@@ -1772,7 +1777,8 @@
         nonce: window.CieLabBooking.nonce,
         start_date: range.start,
         end_date: range.end,
-        calendar_scope: scope
+        calendar_scope: scope,
+        filter_resource: state.filterResource
       }).done(function (response) {
         if (!response || !response.success || !response.data || !Array.isArray(response.data.events)) {
           $container.html('<p>No se pudo cargar el calendario.</p>');
