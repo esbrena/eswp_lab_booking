@@ -516,6 +516,7 @@ final class Bookings {
 				'booking_id' => (int) $booking->ID,
 				'start_date' => (string) get_post_meta((int) $booking->ID, '_cie_booking_start_date', true),
 				'end_date' => (string) get_post_meta((int) $booking->ID, '_cie_booking_end_date', true),
+				'schedule_label' => self::get_booking_schedule_label((int) $booking->ID),
 				'status' => (string) get_post_meta((int) $booking->ID, '_cie_booking_status', true),
 				'user_id' => (int) $booking->post_author,
 				'user_name' => $user ? (string) $user->display_name : (string) __('Usuario', 'cie-lab-booking'),
@@ -578,6 +579,7 @@ final class Bookings {
 				'booking_id' => (int) $booking->ID,
 				'start_date' => $start,
 				'end_date' => $end,
+				'schedule_label' => self::get_booking_schedule_label((int) $booking->ID),
 				'status' => $status,
 				'submitted_at' => (string) $booking->post_date,
 				'user_id' => (int) $booking->post_author,
@@ -1014,6 +1016,141 @@ final class Bookings {
 			return false;
 		}
 		return !empty(self::get_booking_occurrences($booking_id, $date, $date));
+	}
+
+	public static function get_booking_schedule_label(int $booking_id, ?string $range_start = null, ?string $range_end = null): string {
+		$occurrences = self::get_booking_occurrences($booking_id, $range_start, $range_end);
+		return self::format_occurrences_compact_label($occurrences);
+	}
+
+	/**
+	 * @param array<int,array{date:string,start:string,end:string,full_day:bool}> $occurrences
+	 */
+	public static function format_occurrences_compact_label(array $occurrences): string {
+		$occurrences = self::normalize_occurrences($occurrences);
+		if (!$occurrences) {
+			return '';
+		}
+
+		$dates = array_values(array_unique(array_filter(array_map(
+			static function (array $occurrence): string {
+				return (string) ($occurrence['date'] ?? '');
+			},
+			$occurrences
+		))));
+		sort($dates);
+		if (!$dates) {
+			return '';
+		}
+
+		$first_date = (string) reset($dates);
+		$last_date = (string) end($dates);
+		$date_label = self::format_compact_day_month($first_date);
+		if (count($dates) > 1) {
+			$date_label .= ' - ' . self::format_compact_day_month($last_date);
+		}
+
+		$has_full_day = false;
+		foreach ($occurrences as $occurrence) {
+			if (!empty($occurrence['full_day'])) {
+				$has_full_day = true;
+				break;
+			}
+		}
+
+		$time_ranges = self::collect_compact_time_ranges($occurrences);
+		if ($has_full_day) {
+			$time_label = (string) __('Todo el día', 'cie-lab-booking');
+		} elseif ($time_ranges) {
+			$time_label = implode(' , ', $time_ranges);
+		} else {
+			$time_label = (string) __('Horario pendiente', 'cie-lab-booking');
+		}
+
+		return $date_label . ' · ' . $time_label;
+	}
+
+	private static function format_compact_day_month(string $ymd): string {
+		$ts = strtotime($ymd . ' 00:00:00');
+		if ($ts === false) {
+			return $ymd;
+		}
+		return wp_date('j \\d\\e F', $ts);
+	}
+
+	/**
+	 * @param array<int,array{date:string,start:string,end:string,full_day:bool}> $occurrences
+	 * @return array<int,string>
+	 */
+	private static function collect_compact_time_ranges(array $occurrences): array {
+		$ranges = [];
+		$seen = [];
+		foreach ($occurrences as $occurrence) {
+			if (!empty($occurrence['full_day'])) {
+				continue;
+			}
+			$start = self::normalize_time_hm((string) ($occurrence['start'] ?? '')) ?: '';
+			$end = self::normalize_time_hm((string) ($occurrence['end'] ?? '')) ?: '';
+			if ($start === '' || $end === '') {
+				continue;
+			}
+			$start_minutes = self::time_to_minutes($start);
+			$end_minutes = self::time_to_minutes($end);
+			if ($start_minutes < 0 || $end_minutes <= $start_minutes) {
+				continue;
+			}
+			$key = $start . '-' . $end;
+			if (isset($seen[$key])) {
+				continue;
+			}
+			$seen[$key] = true;
+			$ranges[] = [
+				'start' => $start_minutes,
+				'end' => $end_minutes,
+			];
+		}
+		if (!$ranges) {
+			return [];
+		}
+
+		usort(
+			$ranges,
+			static function (array $a, array $b): int {
+				$start_cmp = ((int) $a['start']) <=> ((int) $b['start']);
+				if ($start_cmp !== 0) {
+					return $start_cmp;
+				}
+				return ((int) $a['end']) <=> ((int) $b['end']);
+			}
+		);
+
+		$merged = [];
+		foreach ($ranges as $range) {
+			if (!$merged) {
+				$merged[] = $range;
+				continue;
+			}
+			$last_index = count($merged) - 1;
+			$last = $merged[$last_index];
+			if ((int) $range['start'] <= (int) $last['end']) {
+				$merged[$last_index]['end'] = max((int) $last['end'], (int) $range['end']);
+				continue;
+			}
+			$merged[] = $range;
+		}
+
+		return array_values(array_map(
+			static function (array $range): string {
+				return self::minutes_to_hm((int) $range['start']) . ' - ' . self::minutes_to_hm((int) $range['end']);
+			},
+			$merged
+		));
+	}
+
+	private static function minutes_to_hm(int $minutes): string {
+		$hours = (int) floor($minutes / 60);
+		$mins = $minutes % 60;
+		return sprintf('%02d:%02d', $hours, $mins);
 	}
 
 	/**

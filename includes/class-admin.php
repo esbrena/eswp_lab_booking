@@ -390,8 +390,9 @@ final class Admin {
 			echo '<p><a class="button button-secondary" href="' . esc_url($edit_post_url) . '">' . esc_html__('Editar reserva', 'cie-lab-booking') . '</a></p>';
 		}
 
+		$schedule_label = Bookings::get_booking_schedule_label($booking_id);
 		echo '<p><strong>' . esc_html__('Estado:', 'cie-lab-booking') . '</strong> ' . esc_html(self::status_label($status)) . '</p>';
-		echo '<p><strong>' . esc_html__('Fechas:', 'cie-lab-booking') . '</strong> ' . esc_html($start . ' - ' . $end) . '</p>';
+		echo '<p><strong>' . esc_html__('Fechas:', 'cie-lab-booking') . '</strong> ' . esc_html($schedule_label !== '' ? $schedule_label : ($start . ' - ' . $end)) . '</p>';
 		echo '<p><strong>' . esc_html__('Usuario:', 'cie-lab-booking') . '</strong> ' . esc_html((string) $user_id) . '</p>';
 
 		echo '<h2>' . esc_html__('Detalle', 'cie-lab-booking') . '</h2>';
@@ -549,7 +550,8 @@ final class Admin {
 		echo '</tr></thead><tbody>';
 		foreach ($history as $item) {
 			echo '<tr>';
-			echo '<td>' . esc_html($item['start_date'] . ' - ' . $item['end_date']) . '</td>';
+			$schedule_label = (string) ($item['schedule_label'] ?? '');
+			echo '<td>' . esc_html($schedule_label !== '' ? $schedule_label : ($item['start_date'] . ' - ' . $item['end_date'])) . '</td>';
 			echo '<td>' . esc_html($item['user_name']) . '</td>';
 			echo '<td>' . self::status_badge((string) $item['status']) . '<br/>' . ($item['is_active'] ? '<span class="cie-admin-badge is-active">' . esc_html__('Activa hoy', 'cie-lab-booking') . '</span>' : '') . '</td>';
 			echo '<td><a href="' . esc_url((string) $item['detail_url']) . '">' . esc_html__('Ver reserva', 'cie-lab-booking') . '</a></td>';
@@ -928,9 +930,8 @@ final class Admin {
 
 	public static function booking_column_content(string $column, int $post_id): void {
 		if ($column === 'cie_dates') {
-			$start = (string) get_post_meta($post_id, '_cie_booking_start_date', true);
-			$end = (string) get_post_meta($post_id, '_cie_booking_end_date', true);
-			echo esc_html($start . ' - ' . $end);
+			$label = Bookings::get_booking_schedule_label($post_id);
+			echo esc_html($label !== '' ? $label : '—');
 		}
 		if ($column === 'cie_status') {
 			$status = (string) get_post_meta($post_id, '_cie_booking_status', true);
@@ -1005,12 +1006,12 @@ final class Admin {
 				return;
 			}
 			foreach ($active_items as $item) {
+				$schedule_label = (string) ($item['schedule_label'] ?? '');
 				printf(
-					'<div><a href="%1$s">%2$s</a> <small>(%3$s - %4$s)</small></div>',
+					'<div><a href="%1$s">%2$s</a> <small>(%3$s)</small></div>',
 					esc_url((string) $item['detail_url']),
 					esc_html((string) $item['user_name']),
-					esc_html((string) $item['start_date']),
-					esc_html((string) $item['end_date'])
+					esc_html($schedule_label !== '' ? $schedule_label : ((string) $item['start_date'] . ' - ' . (string) $item['end_date']))
 				);
 			}
 		}
@@ -1308,48 +1309,8 @@ final class Admin {
 	 * @return array<int,string>
 	 */
 	private static function booking_occurrence_lines(array $occurrences, int $max_days = 3): array {
-		$grouped = [];
-		foreach ($occurrences as $occurrence) {
-			$date = (string) ($occurrence['date'] ?? '');
-			if ($date === '') {
-				continue;
-			}
-			if (!isset($grouped[$date])) {
-				$grouped[$date] = [
-					'full_day' => false,
-					'slots' => [],
-				];
-			}
-			if (!empty($occurrence['full_day'])) {
-				$grouped[$date]['full_day'] = true;
-				continue;
-			}
-			$start = trim((string) ($occurrence['start'] ?? ''));
-			$end = trim((string) ($occurrence['end'] ?? ''));
-			if ($start !== '' && $end !== '') {
-				$grouped[$date]['slots'][$start . '-' . $end] = $start . ' - ' . $end;
-			}
-		}
-		$dates = array_keys($grouped);
-		sort($dates);
-		$lines = [];
-		foreach (array_slice($dates, 0, max(1, $max_days)) as $date) {
-			$label = self::format_date_with_weekday($date);
-			if (!empty($grouped[$date]['full_day'])) {
-				$lines[] = $label . ' · ' . __('Día completo', 'cie-lab-booking');
-			} else {
-				$slots = array_values((array) $grouped[$date]['slots']);
-				$lines[] = $label . ' · ' . ($slots ? implode(', ', $slots) : __('Horario pendiente', 'cie-lab-booking'));
-			}
-		}
-		if (count($dates) > max(1, $max_days)) {
-			$lines[] = sprintf(
-				/* translators: %d: hidden day count */
-				__('y %d día(s) más', 'cie-lab-booking'),
-				count($dates) - max(1, $max_days)
-			);
-		}
-		return $lines;
+		$label = Bookings::format_occurrences_compact_label($occurrences);
+		return $label !== '' ? [$label] : [];
 	}
 
 	/**

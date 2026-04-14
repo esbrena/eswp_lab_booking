@@ -827,8 +827,7 @@ final class Shortcodes {
 			<tbody>
 			<?php foreach ($bookings as $b): ?>
 				<?php
-				$start = (string) get_post_meta($b->ID, '_cie_booking_start_date', true);
-				$end = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
+				$schedule_label = Bookings::get_booking_schedule_label((int) $b->ID);
 				$status = (string) get_post_meta($b->ID, '_cie_booking_status', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
 				$equipment = (array) get_post_meta($b->ID, '_cie_booking_equipment', true);
@@ -839,7 +838,7 @@ final class Shortcodes {
 						<strong><?php echo esc_html(sprintf(__('Reserva #%d', 'cie-lab-booking'), (int) $b->ID)); ?></strong>
 					</td>
 					<td><?php echo esc_html((string) mysql2date(get_option('date_format'), (string) $b->post_date)); ?></td>
-					<td><?php echo esc_html($start . ' - ' . $end); ?></td>
+					<td><?php echo esc_html($schedule_label !== '' ? $schedule_label : '—'); ?></td>
 					<td><?php echo esc_html(self::resources_summary($spaces, $equipment)); ?></td>
 					<td>
 						<span class="cie-status-tag cie-status-tag--<?php echo esc_attr(self::status_slug($status)); ?>">
@@ -910,8 +909,7 @@ final class Shortcodes {
 			<tbody>
 			<?php foreach ($bookings as $b): ?>
 				<?php
-				$start = (string) get_post_meta($b->ID, '_cie_booking_start_date', true);
-				$end = (string) get_post_meta($b->ID, '_cie_booking_end_date', true);
+				$schedule_label = Bookings::get_booking_schedule_label((int) $b->ID);
 				$status = (string) get_post_meta($b->ID, '_cie_booking_status', true);
 				$admin_message = (string) get_post_meta($b->ID, '_cie_booking_admin_message', true);
 				$spaces = (array) get_post_meta($b->ID, '_cie_booking_spaces', true);
@@ -941,7 +939,8 @@ final class Shortcodes {
 							if ($schedule_detail_html !== '') {
 								echo $schedule_detail_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 							} else {
-								echo '<strong>' . esc_html(self::resources_summary($spaces, $equipment)) . '</strong><br/><small>' . esc_html($start . ' - ' . $end) . '</small>';
+								$fallback_label = $schedule_label !== '' ? $schedule_label : '—';
+								echo '<strong>' . esc_html(self::resources_summary($spaces, $equipment)) . '</strong><br/><small>' . esc_html($fallback_label) . '</small>';
 							}
 							?>
 						</div>
@@ -1064,60 +1063,8 @@ final class Shortcodes {
 	 * @return array<int,string>
 	 */
 	private static function booking_occurrence_lines(array $occurrences, int $max_days = 3): array {
-		$grouped = [];
-		foreach ($occurrences as $occurrence) {
-			$date = (string) ($occurrence['date'] ?? '');
-			if ($date === '') {
-				continue;
-			}
-			if (!isset($grouped[$date])) {
-				$grouped[$date] = [
-					'full_day' => false,
-					'slots' => [],
-				];
-			}
-			if (!empty($occurrence['full_day'])) {
-				$grouped[$date]['full_day'] = true;
-				continue;
-			}
-			$start = trim((string) ($occurrence['start'] ?? ''));
-			$end = trim((string) ($occurrence['end'] ?? ''));
-			if ($start !== '' && $end !== '') {
-				$grouped[$date]['slots'][$start . '-' . $end] = $start . ' - ' . $end;
-			}
-		}
-		$dates = array_keys($grouped);
-		sort($dates);
-		$all_full_day = !empty($dates);
-		foreach ($dates as $date) {
-			if (empty($grouped[$date]['full_day'])) {
-				$all_full_day = false;
-				break;
-			}
-		}
-		if ($all_full_day && count($dates) > 1 && self::dates_are_consecutive($dates)) {
-			return [
-				self::format_compact_full_day_range((string) $dates[0], (string) end($dates)),
-			];
-		}
-		$lines = [];
-		foreach (array_slice($dates, 0, max(1, $max_days)) as $date) {
-			$label = self::format_date_with_weekday($date);
-			if (!empty($grouped[$date]['full_day'])) {
-				$lines[] = $label . ' · ' . __('Día completo', 'cie-lab-booking');
-			} else {
-				$slots = array_values((array) $grouped[$date]['slots']);
-				$lines[] = $label . ' · ' . ($slots ? implode(', ', $slots) : __('Horario pendiente', 'cie-lab-booking'));
-			}
-		}
-		if (count($dates) > max(1, $max_days)) {
-			$lines[] = sprintf(
-				/* translators: %d: hidden day count */
-				__('y %d día(s) más', 'cie-lab-booking'),
-				count($dates) - max(1, $max_days)
-			);
-		}
-		return $lines;
+		$label = Bookings::format_occurrences_compact_label($occurrences);
+		return $label !== '' ? [$label] : [];
 	}
 
 	/**

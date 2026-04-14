@@ -528,6 +528,7 @@ final class Ajax {
 			}
 			$item['title'] = self::calendar_event_title($booking_type, array_values(array_unique(array_merge((array) $item['spaces'], (array) $item['equipment']))));
 			$item['occurrences'] = Bookings::get_booking_occurrences($bid, $start, $end);
+			$item['scheduleLabel'] = Bookings::format_occurrences_compact_label((array) $item['occurrences']);
 
 			$booking_items[] = $item;
 		}

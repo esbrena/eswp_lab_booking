@@ -203,46 +203,81 @@
     return out;
   }
 
-  function summarizeOccurrences(occurrences, maxDays) {
-    var grouped = {};
+  function summarizeOccurrences(occurrences) {
+    var normalized = [];
     (Array.isArray(occurrences) ? occurrences : []).forEach(function (occ) {
       var date = String((occ && occ.date) || '').trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-      if (!grouped[date]) grouped[date] = { fullDay: false, slots: {} };
-      if (!!occ.full_day) {
-        grouped[date].fullDay = true;
-        return;
-      }
+      normalized.push({
+        date: date,
+        start: String((occ && occ.start) || '').trim(),
+        end: String((occ && occ.end) || '').trim(),
+        full_day: !!(occ && occ.full_day)
+      });
+    });
+    normalized.sort(function (a, b) {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (a.start || '').localeCompare(b.start || '');
+    });
+    if (!normalized.length) {
+      return { dates: [], lines: [] };
+    }
+
+    var dates = normalizeYmdList(normalized.map(function (item) { return item.date; }));
+    var first = dates[0];
+    var last = dates[dates.length - 1];
+    var dateLabel = formatDayMonth(first);
+    if (dates.length > 1) {
+      dateLabel += ' - ' + formatDayMonth(last);
+    }
+
+    var hasFullDay = normalized.some(function (item) { return !!item.full_day; });
+    var ranges = collectCompactTimeRanges(normalized);
+    var timeLabel = hasFullDay ? 'Todo el día' : (ranges.length ? ranges.join(' , ') : 'Horario pendiente');
+
+    return {
+      dates: dates,
+      lines: [dateLabel + ' · ' + timeLabel]
+    };
+  }
+
+  function collectCompactTimeRanges(occurrences) {
+    var ranges = [];
+    var seen = {};
+    (Array.isArray(occurrences) ? occurrences : []).forEach(function (occ) {
+      if (!!(occ && occ.full_day)) return;
       var start = String((occ && occ.start) || '').trim();
       var end = String((occ && occ.end) || '').trim();
-      if (/^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) {
-        grouped[date].slots[start + '-' + end] = start + ' - ' + end;
-      }
+      if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return;
+      var startMinutes = timeToMinutes(start);
+      var endMinutes = timeToMinutes(end);
+      if (startMinutes < 0 || endMinutes <= startMinutes) return;
+      var key = start + '-' + end;
+      if (seen[key]) return;
+      seen[key] = true;
+      ranges.push({ start: startMinutes, end: endMinutes });
     });
-    var dates = Object.keys(grouped).sort();
-    var allFullDay = dates.length > 0 && dates.every(function (date) { return grouped[date].fullDay; });
-    if (allFullDay && dates.length > 1 && datesAreConsecutive(dates)) {
-      return {
-        dates: dates,
-        lines: [formatCompactFullDayRange(dates[0], dates[dates.length - 1])]
-      };
-    }
-    var lines = [];
-    var limit = parseInt(String(maxDays || '3'), 10);
-    if (!limit || limit < 1) limit = 1;
-    dates.slice(0, limit).forEach(function (date) {
-      var base = formatWeekdayDayMonth(date);
-      if (grouped[date].fullDay) {
-        lines.push(base + ' · Día completo');
+    if (!ranges.length) return [];
+    ranges.sort(function (a, b) {
+      if (a.start !== b.start) return a.start - b.start;
+      return a.end - b.end;
+    });
+    var merged = [];
+    ranges.forEach(function (range) {
+      if (!merged.length) {
+        merged.push({ start: range.start, end: range.end });
         return;
       }
-      var slots = Object.keys(grouped[date].slots).sort().map(function (k) { return grouped[date].slots[k]; });
-      lines.push(base + ' · ' + (slots.length ? slots.join(', ') : 'Horario pendiente'));
+      var last = merged[merged.length - 1];
+      if (range.start <= last.end) {
+        last.end = Math.max(last.end, range.end);
+        return;
+      }
+      merged.push({ start: range.start, end: range.end });
     });
-    if (dates.length > limit) {
-      lines.push('y ' + (dates.length - limit) + ' día(s) más');
-    }
-    return { dates: dates, lines: lines };
+    return merged.map(function (range) {
+      return minutesToHm(range.start) + ' - ' + minutesToHm(range.end);
+    });
   }
 
   function bookingTypeLabel(type) {
@@ -337,7 +372,8 @@
   function buildDetailDataFromBooking(booking, maxDays) {
     var safeBooking = booking || {};
     var occurrences = Array.isArray(safeBooking.occurrences) ? safeBooking.occurrences : [];
-    var summarized = summarizeOccurrences(occurrences, maxDays || 3);
+    var summarized = summarizeOccurrences(occurrences);
+    var scheduleLabel = String(safeBooking.scheduleLabel || '').trim();
     var title = String(safeBooking.title || '').trim();
     if (!title && Array.isArray(safeBooking.resources) && safeBooking.resources.length) {
       title = safeBooking.resources.join(', ');
@@ -346,7 +382,7 @@
     return {
       title: title || 'Reserva',
       bookingType: String(safeBooking.type || safeBooking.resourceType || 'space'),
-      occurrenceLines: summarized.lines,
+      occurrenceLines: scheduleLabel ? [scheduleLabel] : summarized.lines,
       repeatLine: repeatLineFromFrequency(String(safeBooking.frequency || 'single'), summarized.dates),
       totalLine: totalLineFromOccurrences(occurrences, String(safeBooking.mode || '')),
       projectName: safeBooking.project && safeBooking.project.name ? safeBooking.project.name : '',
@@ -361,9 +397,12 @@
     return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
   }
 
-  function minutesToHourLabel(minutes) {
-    var h = Math.floor(minutes / 60);
-    return String(h).padStart(2, '0') + ':00';
+  function minutesToHm(minutes) {
+    var safe = parseInt(String(minutes || 0), 10);
+    if (!safe || safe < 0) safe = 0;
+    var h = Math.floor(safe / 60);
+    var m = safe % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
   }
 
   function statusSlug(status) {
@@ -417,80 +456,6 @@
       if (event.key === 'Escape') $modal.hide();
     });
     return $modal;
-  }
-
-  function renderTimelineSlots(date, bookings, blocks) {
-    var hours = [];
-    for (var m = 8 * 60; m < 20 * 60; m += 60) {
-      hours.push({
-        start: m,
-        end: m + 60,
-        blocked: false,
-        bookingIds: []
-      });
-    }
-
-    var isDayBlocked = false;
-    blocks.forEach(function (block) {
-      if (date >= String(block.start_date || '') && date <= String(block.end_date || '')) {
-        isDayBlocked = true;
-      }
-    });
-
-    var bookingNames = {};
-    bookings.forEach(function (booking) {
-      bookingNames[booking.id] = booking.title || ('Reserva #' + booking.id);
-      var occs = Array.isArray(booking.occurrences) ? booking.occurrences : [];
-      occs.forEach(function (occ) {
-        if (occ.date !== date) return;
-        if (occ.full_day) {
-          hours.forEach(function (slot) {
-            if (slot.bookingIds.indexOf(booking.id) === -1) slot.bookingIds.push(booking.id);
-          });
-          return;
-        }
-        var occStart = timeToMinutes(occ.start || '');
-        var occEnd = timeToMinutes(occ.end || '');
-        hours.forEach(function (slot) {
-          var overlap = occStart < slot.end && occEnd > slot.start;
-          if (overlap && slot.bookingIds.indexOf(booking.id) === -1) {
-            slot.bookingIds.push(booking.id);
-          }
-        });
-      });
-    });
-
-    var html = '<div class="cie-day-timeline">';
-    html += '<h5>Huecos y ocupación del día</h5>';
-    html += '<div class="cie-day-timeline__table">';
-    hours.forEach(function (slot) {
-      var isBlocked = isDayBlocked;
-      var hasBooking = slot.bookingIds.length > 0;
-      var stateClass = isBlocked ? 'is-blocked' : hasBooking ? 'is-busy' : 'is-free';
-      html += '<div class="cie-day-timeline__row ' + stateClass + '">';
-      html += '<div class="cie-day-timeline__hour">' + minutesToHourLabel(slot.start) + '</div>';
-      html += '<div class="cie-day-timeline__state">';
-      if (isBlocked) {
-        html += 'Bloqueado por mantenimiento';
-      } else if (hasBooking) {
-        html += slot.bookingIds
-          .map(function (id) {
-            return (
-              '<span class="cie-inline-link" data-cie-booking-id="' +
-              id +
-              '" role="button" tabindex="0">' +
-              escapeHtml(bookingNames[id]) +
-              '</span>'
-            );
-          })
-          .join(', ');
-      } else {
-        html += 'Disponible';
-      }
-      html += '</div></div>';
-    });
-    html += '</div></div>';
-    return html;
   }
 
   function openBookingDetails(bookingId) {
@@ -593,7 +558,6 @@
         return String(a.start_date || '').localeCompare(String(b.start_date || ''));
       });
       var html = '<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4>';
-      html += renderTimelineSlots(date, bookings, blocks);
 
       if (blocks.length) {
         html += '<h5>Mantenimiento</h5><div class="cie-cal-block-list">';
@@ -923,7 +887,7 @@
       else baseDates = parseManualDates(manual);
       var dates = expandDatesForFrequency(baseDates, dayScope, frequency, weeks);
       var occurrences = buildOccurrencesFromDatesAndSlots(mode, dates, slots);
-      var summarized = summarizeOccurrences(occurrences, 3);
+      var summarized = summarizeOccurrences(occurrences);
       var projectName = String($flow.find('input[name="project_name"]').val() || '').trim();
       var projectResponsible = String($flow.find('input[name="project_responsible"]').val() || '').trim();
       var fallbackLine = '';
@@ -1249,7 +1213,7 @@
       var names = selectedResourceNames();
       var installType = selectedInstallationType();
       var bookingType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
-      var summarized = summarizeOccurrences(payload.occurrences || [], 3);
+      var summarized = summarizeOccurrences(payload.occurrences || []);
       var projectName = String($flow.find('input[name="project_name"]').val() || '').trim();
       var projectResponsible = String($flow.find('input[name="project_responsible"]').val() || '').trim();
       return renderBookingDetailCard({
