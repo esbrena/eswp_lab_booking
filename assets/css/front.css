@@ -1549,17 +1549,27 @@ button.cie-resource-group-toggle {
 }
 
 .cie-booking-detail__block-title--clock::before {
-  content: '\1F553';
-  font-size: 14px;
-  line-height: 1;
-  color: #0ea5e9;
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg%20version='1.1'%20id='Calendar--Streamline-Carbon'%20xmlns='http://www.w3.org/2000/svg'%20xmlns:xlink='http://www.w3.org/1999/xlink'%20x='0'%20y='0'%20viewBox='0%200%2016%2016'%20xml:space='preserve'%20enable-background='new%200%200%2032%2032'%20height='16'%20width='16'%3E%3Ctitle%3Ecalendar%3C%2Ftitle%3E%3Cpath%20d='M13%202h-2V1h-1v1h-4V1h-1v1H3c-0.55%200%20-1%200.45%20-1%201v10c0%200.55%200.45%201%201%201h10c0.55%200%201%20-0.45%201%20-1V3c0%20-0.55%20-0.45%20-1%20-1%20-1zm0%2011H3V6h10v7zm0%20-8H3V3h2v1h1V3h4v1h1V3h2v2z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20id='_Transparent_Rectangle_'%20d='M0%200h16v16H0Z'%20fill='none'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
 }
 
 .cie-booking-detail__block-title--list::before {
-  content: '\1F4C4';
-  font-size: 14px;
-  line-height: 1;
-  color: #64748b;
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg%20id='Align-Box-Top-Left--Streamline-Carbon'%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20height='16'%20width='16'%3E%3Cpath%20d='M13%2015H3a1.00115%201.00115%200%200%201%20-1%20-1V2a1.00115%201.00115%200%200%201%201%20-1h10a1.00115%201.00115%200%200%201%201%201v12a1.00115%201.00115%200%200%201%20-1%201ZM3%202v12h10V2Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20d='M4.5%203.5h5.5v1H4.5Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20d='M4.5%206h3.5v1H4.5Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20id='_Transparent_Rectangle_'%20d='M0%200h16v16H0Z'%20fill='none'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
 }
 
 .cie-booking-detail__line {
