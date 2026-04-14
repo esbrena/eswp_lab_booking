@@ -527,6 +527,7 @@
     var $modal = ensureModal();
     $modal.find('.cie-modal__content').html('<h4>Detalle de ' + escapeHtml(formatLongDate(date)) + '</h4><p>Cargando...</p>');
     $modal.show();
+    var includePending = !!(filters && filters.includePending);
 
     if (!window.CieLabBooking || !window.CieLabBooking.ajaxUrl) {
       $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
@@ -538,7 +539,8 @@
       nonce: window.CieLabBooking.nonce,
       date: date,
       calendar_scope: scope || 'general',
-      filter_resource: (filters && filters.resourceName) ? String(filters.resourceName) : 'all'
+      filter_resource: (filters && filters.resourceName) ? String(filters.resourceName) : 'all',
+      booking_view: includePending ? 'all' : 'approved'
     }).done(function (response) {
       if (!response || !response.success || !response.data) {
         $modal.find('.cie-modal__content').html('<h4>Detalle</h4><p>No se pudo cargar el detalle.</p>');
@@ -1516,6 +1518,7 @@
       event.type === 'block' ? 'is-block' : 'is-booking',
       'is-' + statusSlug(event.status || ''),
       event.isPast ? 'is-past' : '',
+      event.isPendingFaded ? 'is-pending-faded' : '',
       resourceTypeClass(event.resourceType || ''),
       event.isPreview ? 'is-preview' : ''
     ].join(' ');
@@ -1531,12 +1534,14 @@
     if (!$container.length) return;
     var scope = String($container.attr('data-cie-calendar-scope') || 'general');
     var defaultView = String($container.attr('data-cie-default-view') || 'month');
+    var showPendingToggle = $container.is('[data-cie-form-linked-scheduler="1"]');
     var state = {
       view: (defaultView === 'week' || defaultView === 'day') ? defaultView : 'month',
       current: new Date(),
       events: [],
       filterType: 'all',
       filterResource: 'all',
+      showPending: false,
       previewPayload: null
     };
 
@@ -1615,6 +1620,17 @@
 
     function filteredEvents() {
       return state.events.filter(function (event) {
+        if (event.type === 'booking') {
+          var status = String(event.status || '');
+          var isPendingBooking = status === 'pending' || status === 'changes_requested';
+          event.isPendingFaded = false;
+          if (isPendingBooking && !state.showPending) {
+            return false;
+          }
+          if (isPendingBooking && state.showPending) {
+            event.isPendingFaded = true;
+          }
+        }
         if (state.filterType !== 'all' && event.type === 'booking' && String(event.resourceType || 'space') !== state.filterType) {
           return false;
         }
@@ -1685,6 +1701,9 @@
               '<option value="day"' + (state.view === 'day' ? ' selected' : '') + '>Día</option>' +
             '</select>' +
           '</div>' +
+          (showPendingToggle
+            ? '<label class="cie-scheduler__pending-toggle"><input type="checkbox" data-cie-toggle-pending="1"' + (state.showPending ? ' checked' : '') + ' /> Ver pendientes</label>'
+            : '') +
           '<!--<div class="cie-scheduler__filters">' +
             '<select data-cie-filter-type>' +
               '<option value="all"' + (state.filterType === 'all' ? ' selected' : '') + '>Todos</option>' +
@@ -1828,7 +1847,8 @@
         start_date: range.start,
         end_date: range.end,
         calendar_scope: scope,
-        filter_resource: state.filterResource
+        filter_resource: state.filterResource,
+        booking_view: state.showPending ? 'all' : 'approved'
       }).done(function (response) {
         if (!response || !response.success || !response.data || !Array.isArray(response.data.events)) {
           $container.html('<p>No se pudo cargar el calendario.</p>');
@@ -1860,6 +1880,10 @@
       state.filterResource = String($(this).val() || 'all');
       load();
     });
+    $container.on('change', '[data-cie-toggle-pending]', function () {
+      state.showPending = $(this).is(':checked');
+      load();
+    });
     $container.on('click', '[data-cie-open-day]', function (event) {
       event.preventDefault();
       if ($(event.target).closest('[data-cie-open-day-more]').length) return;
@@ -1868,7 +1892,8 @@
       if (date) {
         openDayDetails(date, scope, {
           resourceType: state.filterType,
-          resourceName: state.filterResource
+          resourceName: state.filterResource,
+          includePending: state.showPending
         });
       }
     });
@@ -1879,7 +1904,8 @@
       if (date) {
         openDayDetails(date, scope, {
           resourceType: state.filterType,
-          resourceName: state.filterResource
+          resourceName: state.filterResource,
+          includePending: state.showPending
         });
       }
     });

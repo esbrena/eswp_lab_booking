@@ -943,6 +943,18 @@ select {
   flex-wrap: wrap;
 }
 
+.cie-scheduler__pending-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.cie-scheduler__pending-toggle input {
+  margin: 0;
+}
+
 .cie-scheduler__filters select {
   min-height: 32px;
   border-radius: 8px;
@@ -1050,6 +1062,10 @@ select {
 */
 
 .cie-scheduler__event-chip.is-past {
+  opacity: 0.6;
+}
+
+.cie-scheduler__event-chip.is-pending-faded {
   opacity: 0.6;
 }
 
