@@ -731,7 +731,7 @@
     });
     $container.on('change', '[data-cie-filter-resource]', function () {
       state.filterResource = String($(this).val() || 'all');
-      render();
+      load();
     });
     $container.on('change', '[data-cie-filter-booking-view]', function () {
       state.bookingView = String($(this).val() || 'approved');

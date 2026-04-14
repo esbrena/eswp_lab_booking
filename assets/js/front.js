@@ -969,21 +969,31 @@
       var $box = $flow.find('[data-cie-slot-availability]');
       var $selector = $flow.find('[data-cie-slot-selector]');
       var selected = {};
+      var availableSlots = (Array.isArray(slots) ? slots : []).filter(function (slot) {
+        return !!(slot && slot.available);
+      });
       selectedTimeSlots().forEach(function (slot) {
         selected[slot] = true;
       });
       var html = '<strong>Bloques para ' + escapeHtml(formatLongDate(date)) + '</strong><div class="cie-slot-grid">';
       var selectorHtml = '';
-      slots.forEach(function (slot) {
+      if (!availableSlots.length) {
+        $flow.find('input[name="booking_time_slots[]"]').prop('checked', false);
+        html += '</div>';
+        html += '<div class="cie-cal-muted" style="margin-top:6px;">' + escapeHtml(extraMessage || 'No hay horarios disponibles para la selección actual.') + '</div>';
+        $box.html(html).show();
+        $selector.empty().hide();
+        updateScheduleNotice();
+        return;
+      }
+      availableSlots.forEach(function (slot) {
         var slotKey = String(slot.start + '-' + slot.end);
-        var enabled = !!slot.available;
-        var selectedAttr = enabled && selected[slotKey] ? ' checked' : '';
-        var disabledAttr = enabled ? '' : ' disabled';
-        var selectedClass = enabled && selected[slotKey] ? ' is-selected' : '';
-        var stateClass = enabled ? 'is-available' : 'is-unavailable';
+        var selectedAttr = selected[slotKey] ? ' checked' : '';
+        var selectedClass = selected[slotKey] ? ' is-selected' : '';
+        var stateClass = 'is-available';
         html += '<span class="cie-slot-chip ' + stateClass + selectedClass + '">' + escapeHtml(slot.start + ' - ' + slot.end) + '</span>';
         selectorHtml += '<label class="cie-slot-chip ' + stateClass + selectedClass + '">';
-        selectorHtml += '<input type="checkbox" name="booking_time_slots[]" value="' + escapeHtml(slotKey) + '"' + selectedAttr + disabledAttr + ' />';
+        selectorHtml += '<input type="checkbox" name="booking_time_slots[]" value="' + escapeHtml(slotKey) + '"' + selectedAttr + ' />';
         selectorHtml += escapeHtml(slot.start + ' - ' + slot.end) + '</label>';
       });
       html += '</div>';
@@ -1006,7 +1016,7 @@
         return;
       }
       if (!resources.spaces.length && !resources.equipment.length) {
-        renderSlotSelector(date, baseHourSlots(), 'Seleccione al menos un espacio o equipo para activar los slots disponibles.');
+        renderSlotSelector(date, [], 'Seleccione al menos un espacio o equipo para consultar disponibilidad horaria.');
         updateScheduleNotice();
         return;
       }
@@ -1029,7 +1039,7 @@
         selectedTimeSlots().forEach(function (slot) {
           selected[slot] = true;
         });
-        renderSlotSelector(date, response.data.slots);
+        renderSlotSelector(date, response.data.slots, 'No hay horarios disponibles para la selección actual.');
         updateScheduleNotice();
         updateContinueState();
         updateFormAvailability();
@@ -1225,6 +1235,33 @@
     }
 
     var verifyXhr = null;
+    function setPlanningLoading(isLoading) {
+      var $planningCard = $flow.find('[data-cie-phase="planning"] .cie-step-card').first();
+      var $verifyButton = $flow.find('[data-cie-continue="planning"]');
+      $planningCard.toggleClass('is-loading', !!isLoading);
+      $verifyButton.prop('disabled', !!isLoading);
+      $verifyButton.toggleClass('is-disabled', !!isLoading);
+    }
+
+    function buildVerificationSummaryHtml(payload) {
+      var names = selectedResourceNames();
+      var installType = selectedInstallationType();
+      var bookingType = installType === 'combined' ? 'combined' : (installType === 'equipment' ? 'equipment' : 'space');
+      var summarized = summarizeOccurrences(payload.occurrences || [], 3);
+      var projectName = String($flow.find('input[name="project_name"]').val() || '').trim();
+      var projectResponsible = String($flow.find('input[name="project_responsible"]').val() || '').trim();
+      return renderBookingDetailCard({
+        title: names.length ? names.join(', ') : 'Reserva',
+        bookingType: bookingType,
+        occurrenceLines: summarized.lines,
+        repeatLine: repeatLineFromFrequency(payload.frequency || 'single', summarized.dates),
+        totalLine: totalLineFromOccurrences(payload.occurrences || [], payload.mode || 'full_day'),
+        projectName: projectName,
+        projectResponsible: projectResponsible,
+        fallbackLine: ''
+      });
+    }
+
     function verifyReservationAndContinue() {
       var payload = buildVerificationPayload();
       var $notice = $flow.find('[data-cie-notice="planning-verification"]');
@@ -1245,6 +1282,7 @@
         return;
       }
       if (verifyXhr && verifyXhr.abort) verifyXhr.abort();
+      setPlanningLoading(true);
       $notice.removeClass('is-error is-success').addClass('is-info').text('Verificando conflictos de la reserva...');
       verifyXhr = $.post(window.CieLabBooking.ajaxUrl, {
         action: 'cie_lab_booking_verify_reservation',
@@ -1259,8 +1297,12 @@
           $detailsNotice.removeClass('is-info is-success').addClass('is-error').text(message);
           return;
         }
-        $notice.removeClass('is-info is-error').addClass('is-success').text(String(response.data.message || 'La reserva no tiene conflictos.'));
-        $detailsNotice.removeClass('is-info is-error').addClass('is-success').text(String(response.data.message || 'La reserva no tiene conflictos.'));
+        var summaryHtml = buildVerificationSummaryHtml(payload);
+        $notice.removeClass('is-info is-error').addClass('is-success').html('<strong>' + escapeHtml(String(response.data.message || 'Disponibilidad validada.')) + '</strong>');
+        $detailsNotice
+          .removeClass('is-info is-error')
+          .addClass('is-success')
+          .html('<div><strong>Disponibilidad validada. Revise el resumen de la reserva y complete los datos del proyecto.</strong></div>' + summaryHtml);
         setPhase('details');
         var $details = $flow.find('[data-cie-phase="details"]');
         if ($details.length) {
@@ -1269,6 +1311,8 @@
       }).fail(function () {
         $notice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
         $detailsNotice.removeClass('is-info is-success').addClass('is-error').text('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.');
+      }).always(function () {
+        setPlanningLoading(false);
       });
     }
 
@@ -1574,9 +1618,15 @@
         if (state.filterType !== 'all' && event.type === 'booking' && String(event.resourceType || 'space') !== state.filterType) {
           return false;
         }
+        if (event.type === 'block') {
+          if (state.filterResource === 'all') {
+            return !!event.isGlobal;
+          }
+          var blockResources = Array.isArray(event.resources) ? event.resources : [];
+          return blockResources.indexOf(state.filterResource) !== -1;
+        }
         if (state.filterResource !== 'all') {
           var names = Array.isArray(event.resources) ? event.resources : [];
-          if (event.type === 'block' && event.isGlobal) return true;
           if (names.indexOf(state.filterResource) === -1) return false;
         }
         return true;
@@ -1808,7 +1858,7 @@
     });
     $container.on('change', '[data-cie-filter-resource]', function () {
       state.filterResource = String($(this).val() || 'all');
-      render();
+      load();
     });
     $container.on('click', '[data-cie-open-day]', function (event) {
       event.preventDefault();
@@ -1843,15 +1893,31 @@
     $container.data('cieSchedulerApi', {
       setFilters: function (filters) {
         if (!filters || typeof filters !== 'object') return;
+        var changed = false;
         if (filters.resourceType) {
-          state.filterType = String(filters.resourceType);
+          var nextType = String(filters.resourceType);
+          if (state.filterType !== nextType) {
+            state.filterType = nextType;
+            changed = true;
+          }
         }
         if (Array.isArray(filters.resourceNames) && filters.resourceNames.length) {
-          state.filterResource = String(filters.resourceNames[0]);
+          var nextResource = String(filters.resourceNames[0]);
+          if (state.filterResource !== nextResource) {
+            state.filterResource = nextResource;
+            changed = true;
+          }
         } else {
-          state.filterResource = 'all';
+          if (state.filterResource !== 'all') {
+            state.filterResource = 'all';
+            changed = true;
+          }
         }
-        render();
+        if (changed) {
+          load();
+        } else {
+          render();
+        }
       },
       setFocusDate: function (ymd) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return;
