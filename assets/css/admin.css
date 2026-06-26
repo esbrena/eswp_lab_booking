@@ -358,6 +358,12 @@
   gap: 6px;
 }
 
+.cie-scheduler__title {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .cie-scheduler__nav button,
 .cie-scheduler__views button,
 .cie-scheduler__day,
