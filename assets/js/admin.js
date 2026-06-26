@@ -561,6 +561,13 @@
       });
     }
 
+    function periodTitle() {
+      var options = state.view === 'day'
+        ? { day: 'numeric', month: 'long', year: 'numeric' }
+        : { month: 'long', year: 'numeric' };
+      return state.current.toLocaleDateString('es-ES', options);
+    }
+
     function renderToolbar() {
       var options = resourceOptions();
       return (
@@ -570,6 +577,7 @@
             '<button type="button" data-cie-today="1">Hoy</button>' +
             '<button type="button" data-cie-nav="1">&rarr;</button>' +
           '</div>' +
+          '<div class="cie-scheduler__title">' + escapeHtml(periodTitle()) + '</div>' +
           '<div class="cie-scheduler__views">' +
             '<button type="button" data-cie-view="month"' + (state.view === 'month' ? ' class="is-active"' : '') + '>Mes</button>' +
             '<button type="button" data-cie-view="week"' + (state.view === 'week' ? ' class="is-active"' : '') + '>Semana</button>' +
