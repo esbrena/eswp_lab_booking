@@ -190,7 +190,7 @@
 
 .cie-admin-calendar-toolbar {
   margin: 12px 0;
-  display: flex;
+  display: none;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
@@ -366,6 +366,7 @@
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
+  padding:8px;
 }
 
 .cie-scheduler__views button.is-active {
@@ -644,22 +645,43 @@
 }
 
 .cie-booking-detail__block {
-  border-top: 1px dashed #cbd5e1;
-  padding-top: 8px;
+    border-top: 1px dashed #cbd5e1;
+    padding-top: 8px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 .cie-booking-detail__block-title {
   font-weight: 800;
   color: #334155;
   margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .cie-booking-detail__block-title--clock::before {
-  content: '🕒 ';
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 20px;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: bottom;
+  background-image: url("data:image/svg+xml,%3Csvg%20version%3D%221.1%22%20id%3D%22Calendar--Streamline-Carbon%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20xmlns%3Axlink%3D%22http%3A//www.w3.org/1999/xlink%22%20x%3D%220%22%20y%3D%220%22%20viewBox%3D%220%200%2016%2016%22%20xml%3Aspace%3D%22preserve%22%20enable-background%3D%22new%200%200%2032%2032%22%20height%3D%2216%22%20width%3D%2216%22%3E%3Cdesc%3ECalendar%20Streamline%20Icon%3A%20https%3A//streamlinehq.com%3C/desc%3E%3Ctitle%3Ecalendar%3C/title%3E%3Cpath%20d%3D%22M13%202h-2V1h-1v1h-4V1h-1v1H3c-0.55%200%20-1%200.45%20-1%201v10c0%200.55%200.45%201%201%201h10c0.55%200%201%20-0.45%201%20-1V3c0%20-0.55%20-0.45%20-1%20-1%20-1zm0%2011H3V6h10v7zm0%20-8H3V3h2v1h1V3h4v1h1V3h2v2z%22%20fill%3D%22%23000000%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3Cpath%20id%3D%22_Transparent_Rectangle_%22%20d%3D%22M0%200h16v16H0Z%22%20fill%3D%22none%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3C/svg%3E");
 }
 
 .cie-booking-detail__block-title--list::before {
-  content: '≡ ';
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 20px;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: bottom;
+  background-image: url("data:image/svg+xml,%3Csvg%20id%3D%22Align-Box-Top-Left--Streamline-Carbon%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%20height%3D%2216%22%20width%3D%2216%22%3E%3Cdesc%3EAlign%20Box%20Top%20Left%20Streamline%20Icon%3A%20https%3A//streamlinehq.com%3C/desc%3E%3Cdefs%3E%3C/defs%3E%3Cpath%20d%3D%22M13%2015H3a1.00115%201.00115%200%200%201%20-1%20-1V2a1.00115%201.00115%200%200%201%201%20-1h10a1.00115%201.00115%200%200%201%201%201v12a1.00115%201.00115%200%200%201%20-1%201ZM3%202v12h10V2Z%22%20fill%3D%22%23000000%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3Cpath%20d%3D%22M4.5%203.5h5.5v1H4.5Z%22%20fill%3D%22%23000000%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3Cpath%20d%3D%22M4.5%206h3.5v1H4.5Z%22%20fill%3D%22%23000000%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3Cpath%20id%3D%22_Transparent_Rectangle_%22%20d%3D%22M0%200h16v16H0Z%22%20fill%3D%22none%22%20stroke-width%3D%220.5%22%3E%3C/path%3E%3C/svg%3E");
 }
 
 .cie-booking-detail__line {

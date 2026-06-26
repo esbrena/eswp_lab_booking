@@ -185,34 +185,34 @@ final class Ajax {
 			wp_send_json_error(['message' => __('Nonce inválido.', 'cie-lab-booking')], 403);
 		}
 
-		$raw_occurrences = (string) ($_POST['occurrences'] ?? '[]');
+		$raw_occurrences = (string) wp_unslash((string) ($_POST['occurrences'] ?? '[]'));
 		$decoded = json_decode($raw_occurrences, true);
 		if (!is_array($decoded)) {
-			wp_send_json_error(['message' => __('No se han recibido ocurrencias válidas para verificar.', 'cie-lab-booking')], 400);
+			wp_send_json_error(['message' => __('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.', 'cie-lab-booking')]);
 		}
 
 		$occurrences = Bookings::sanitize_occurrences((array) $decoded);
 		if (!$occurrences) {
-			wp_send_json_error(['message' => __('No hay ocurrencias válidas para verificar.', 'cie-lab-booking')], 400);
+			wp_send_json_error(['message' => __('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.', 'cie-lab-booking')]);
 		}
 
 		$space_ids = array_values(array_filter(array_map('intval', (array) ($_POST['spaces'] ?? []))));
 		$equipment_ids = array_values(array_filter(array_map('intval', (array) ($_POST['equipment'] ?? []))));
 		if (!$space_ids && !$equipment_ids) {
-			wp_send_json_error(['message' => __('Debes seleccionar al menos un recurso para verificar la reserva.', 'cie-lab-booking')], 400);
+			wp_send_json_error(['message' => __('Debes seleccionar al menos un recurso para verificar la reserva.', 'cie-lab-booking')]);
 		}
 
 		$conflicts = Bookings::find_conflicts_for_occurrences($occurrences, $space_ids, $equipment_ids);
 		$has_conflicts = !empty($conflicts['spaces']) || !empty($conflicts['equipment']) || !empty($conflicts['blocked']);
 		if ($has_conflicts) {
 			wp_send_json_error([
-				'message' => __('Se han detectado conflictos con reservas validadas o bloqueos de mantenimiento.', 'cie-lab-booking'),
+				'message' => __('La disponibilidad solicitada no está disponible, modifíquela e inténtelo de nuevo.', 'cie-lab-booking'),
 				'conflicts' => $conflicts,
-			], 409);
+			]);
 		}
 
 		wp_send_json_success([
-			'message' => __('Reserva verificada correctamente. No se han detectado conflictos.', 'cie-lab-booking'),
+			'message' => __('La disponibilidad es válida.', 'cie-lab-booking'),
 		]);
 	}
 
@@ -237,6 +237,10 @@ final class Ajax {
 		$calendar_scope = sanitize_key((string) ($_POST['calendar_scope'] ?? 'general'));
 		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
 			$calendar_scope = 'general';
+		}
+		$filter_resource = sanitize_text_field((string) wp_unslash((string) ($_POST['filter_resource'] ?? 'all')));
+		if ($filter_resource === '') {
+			$filter_resource = 'all';
 		}
 		if ($calendar_scope === 'current_user' && !$user_id) {
 			wp_send_json_error(['message' => __('Debes iniciar sesión para ver este calendario.', 'cie-lab-booking')], 403);
@@ -315,6 +319,9 @@ final class Ajax {
 			$blocked_ids = array_values(array_filter(array_map('intval', (array) get_post_meta($block_id, '_cie_block_resource_ids', true))));
 			$is_global = !$blocked_ids;
 			$resource_names = $is_global ? [(string) __('Todos los recursos', 'cie-lab-booking')] : self::resource_names($blocked_ids);
+			if (!self::block_matches_resource_filter($is_global, $resource_names, $filter_resource)) {
+				continue;
+			}
 			while ($cursor <= $last) {
 				$day = gmdate('Y-m-d', $cursor);
 				$events[] = [
@@ -428,6 +435,10 @@ final class Ajax {
 		if (!in_array($calendar_scope, ['general', 'current_user'], true)) {
 			$calendar_scope = 'general';
 		}
+		$filter_resource = sanitize_text_field((string) wp_unslash((string) ($_POST['filter_resource'] ?? 'all')));
+		if ($filter_resource === '') {
+			$filter_resource = 'all';
+		}
 		if ($calendar_scope === 'current_user' && !$user_id) {
 			wp_send_json_error(['message' => __('Debes iniciar sesión para ver este calendario.', 'cie-lab-booking')], 403);
 		}
@@ -517,6 +528,7 @@ final class Ajax {
 			}
 			$item['title'] = self::calendar_event_title($booking_type, array_values(array_unique(array_merge((array) $item['spaces'], (array) $item['equipment']))));
 			$item['occurrences'] = Bookings::get_booking_occurrences($bid, $start, $end);
+			$item['scheduleLabel'] = Bookings::format_occurrences_compact_label((array) $item['occurrences']);
 
 			$booking_items[] = $item;
 		}
@@ -536,6 +548,9 @@ final class Ajax {
 						$resources[] = $p->post_title;
 					}
 				}
+			}
+			if (!self::block_matches_resource_filter($is_global, $resources, $filter_resource)) {
+				continue;
 			}
 
 			$block_items[] = [
@@ -623,6 +638,20 @@ final class Ajax {
 			return !empty($resource_names) ? (string) $resource_names[0] : (string) __('Reserva de equipo', 'cie-lab-booking');
 		}
 		return (string) __('Reserva', 'cie-lab-booking');
+	}
+
+	/**
+	 * @param array<int,string> $resource_names
+	 */
+	private static function block_matches_resource_filter(bool $is_global, array $resource_names, string $filter_resource): bool {
+		$filter_resource = trim($filter_resource);
+		if ($filter_resource === '' || $filter_resource === 'all') {
+			return $is_global;
+		}
+		if ($is_global) {
+			return false;
+		}
+		return in_array($filter_resource, $resource_names, true);
 	}
 
 	/**

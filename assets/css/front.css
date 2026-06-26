@@ -52,6 +52,7 @@
   width: 100%;
   border-collapse: separate; /* Cambia de colapsado a separado */
   border-spacing: 12px; 
+  text-align:left;
 }
 
 .cie-table--my-bookings td {
@@ -373,8 +374,9 @@
 
 .cie-step-card legend {
   font-weight: 800;
-  color: #0f172a;
-  padding: 0 6px;
+    font-size: 12px;
+    color: #0f172a;
+    padding: 8px 0px;
 }
 
 .cie-step-card input[type='text'],
@@ -403,7 +405,7 @@
 }
 
 .cie-lab-booking__submit {
-  margin-top: 2px;
+  margin-top: 32px;
 }
 
 .cie-lab-booking__notice {
@@ -426,6 +428,10 @@
   background: #f0fdf4;
   color: #14532d;
 }
+.cie-lab-booking__notice .cie-booking-detail {
+  margin-top:16px;
+}
+
 
 .cie-lab-booking__notice.is-info {
   border-color: #bfdbfe;
@@ -893,22 +899,25 @@ label.cie-slot-chip {
   border-left: 1px solid #dbe3ef;
   background: #fff;
   padding: 16px;
-  min-height:calc(100vh - 85px - 66px);
+  min-height:calc(100vh - 85px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .cie-booking-layout__form {
   padding: 32px;
 }
 
 .cie-booking-layout__form, .cie-booking-layout__calendar {
-  height: calc(100vh - 85px - 66px);
-  overflow: scroll;
+  height: calc(100vh - 85px);
+  overflow-y: scroll;
 }
 hr {
-  margin: 16px 0px !important;
   opacity: 0.2 !important;
+  width: calc(100% + 32px);
+    margin-left: -16px !important;
+    margin-top: 24px !important;
+    margin-bottom: 24px !important;
 }
 .cie-scheduler__nav button {
     padding: 8px;
@@ -941,6 +950,18 @@ select {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.cie-scheduler__pending-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.cie-scheduler__pending-toggle input {
+  margin: 0;
 }
 
 .cie-scheduler__filters select {
@@ -1053,6 +1074,10 @@ select {
   opacity: 0.6;
 }
 
+.cie-scheduler__event-chip.is-pending-faded {
+  opacity: 0.6;
+}
+
 .cie-scheduler__event-chip.is-rejected,
 .cie-scheduler__event-chip.is-cancelled,
 .cie-scheduler__event-chip.is-block {
@@ -1102,7 +1127,9 @@ select {
 
 .cie-scheduler__time-grid {
   display: grid;
-  gap: 4px;
+  gap: 2px;
+  height: calc(100vh - 85px - 38px - 42px);
+  min-height: 500px;
 }
 
 .cie-scheduler__time-header,
@@ -1249,6 +1276,10 @@ select {
 
 .cie-resource-search-wrap {
   margin-top: 10px;
+  font-size: 12px;
+    font-weight: 800;
+    padding: 0px;
+    margin-bottom:32px;
 }
 
 .cie-resource-search-wrap input[data-cie-resource-search="1"] {
@@ -1260,11 +1291,12 @@ select {
 }
 
 .cie-resource-table-wrap {
-  border: 1px solid #dbe3ef;
-  border-radius: 10px;
-  max-height: 260px;
-  overflow: auto;
-  background: #fff;
+  border-top: 1px solid lightgray;
+  border-bottom: 1px solid lightgray;
+    border-radius: 0px;
+    max-height: 80vh;
+    overflow: auto;
+    background: #fff;
 }
 
 .cie-resource-table {
@@ -1339,7 +1371,10 @@ button.cie-resource-group-toggle {
     background: transparent !important;
     border: none;
     color: black !important;
-    padding:0px 6px;
+    padding: 0px 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 800;
 }
 
 .cie-resource-group-toggle__icon::before {
@@ -1383,7 +1418,7 @@ button.cie-resource-group-toggle {
 }
 
 .cie-selected-resources-step1 {
-  margin-top: 12px;
+  margin-top: 48px;
 }
 
 .cie-selected-tags {
@@ -1420,6 +1455,40 @@ button.cie-resource-group-toggle {
 .cie-resource-step__actions .cie-btn.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.cie-step-card.is-loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.cie-step-card.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.72);
+  z-index: 3;
+}
+
+.cie-step-card.is-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  margin-left: -16px;
+  border-radius: 999px;
+  border: 3px solid #bfdbfe;
+  border-top-color: #0ea5e9;
+  animation: cieSpin 0.75s linear infinite;
+  z-index: 4;
+}
+
+@keyframes cieSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .cie-resource-step__actions {
@@ -1499,17 +1568,27 @@ button.cie-resource-group-toggle {
 }
 
 .cie-booking-detail__block-title--clock::before {
-  content: '\1F553';
-  font-size: 14px;
-  line-height: 1;
-  color: #0ea5e9;
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg%20version='1.1'%20id='Calendar--Streamline-Carbon'%20xmlns='http://www.w3.org/2000/svg'%20xmlns:xlink='http://www.w3.org/1999/xlink'%20x='0'%20y='0'%20viewBox='0%200%2016%2016'%20xml:space='preserve'%20enable-background='new%200%200%2032%2032'%20height='16'%20width='16'%3E%3Ctitle%3Ecalendar%3C%2Ftitle%3E%3Cpath%20d='M13%202h-2V1h-1v1h-4V1h-1v1H3c-0.55%200%20-1%200.45%20-1%201v10c0%200.55%200.45%201%201%201h10c0.55%200%201%20-0.45%201%20-1V3c0%20-0.55%20-0.45%20-1%20-1%20-1zm0%2011H3V6h10v7zm0%20-8H3V3h2v1h1V3h4v1h1V3h2v2z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20id='_Transparent_Rectangle_'%20d='M0%200h16v16H0Z'%20fill='none'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
 }
 
 .cie-booking-detail__block-title--list::before {
-  content: '\1F4C4';
-  font-size: 14px;
-  line-height: 1;
-  color: #64748b;
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg%20id='Align-Box-Top-Left--Streamline-Carbon'%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20height='16'%20width='16'%3E%3Cpath%20d='M13%2015H3a1.00115%201.00115%200%200%201%20-1%20-1V2a1.00115%201.00115%200%200%201%201%20-1h10a1.00115%201.00115%200%200%201%201%201v12a1.00115%201.00115%200%200%201%20-1%201ZM3%202v12h10V2Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20d='M4.5%203.5h5.5v1H4.5Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20d='M4.5%206h3.5v1H4.5Z'%20fill='%23000000'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3Cpath%20id='_Transparent_Rectangle_'%20d='M0%200h16v16H0Z'%20fill='none'%20stroke-width='0.5'%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
 }
 
 .cie-booking-detail__line {
@@ -1531,6 +1610,7 @@ button.cie-resource-group-toggle {
   position: relative;
   padding-right: 190px;
   margin-bottom: 10px;
+  margin-right:56px;
 }
 
 .cie-booking-modal-header h4 {
@@ -1556,17 +1636,96 @@ button.cie-resource-group-toggle {
 }
 .first-card {
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
-  border-top: 8px solid #cc1818;
-  border-radius: 0px 0px 16px 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px;
+    border-radius: 12px;
+    border-radius: 16px;
+    padding: 16px;
 }
 
 .first-card .cie-step-card {
-  border: 1px solid #dbe3ef;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px;
+  border: none;
+    border-radius: 12px;
+    background: transparent;
+    padding: 0px;
+}
+.cie-booking-detail__title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.2;
+    color: #0f172a;
+    flex-direction: column-reverse;
 }
 
+.cie-booking-detail__block {
+    display: flex;
+    gap: 8px;
+}
+
+.cie-booking-detail__block-title {
+    font-size: 12px;
+    font-weight: normal;
+}
+.cie-booking-detail__line {
+    font-weight:normal !important;
+}
+.cie-slot-availability {
+    margin-top: 10px;
+    border: none;
+    border-radius: 0px;
+    padding: 0px;
+    font-size: 14px;
+    background: transparent;
+}
+.cie-slot-selector {
+    margin-top: 8px;
+    margin-bottom: 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.cie-slot-chip.is-available {
+    background: #ffffff;
+    color: #162d65;
+    border-color: #b2d9ff;
+}
+.cie-slot-chip.is-selected {
+    box-shadow: 0 0 0 2px rgb(0 138 201 / 20%);
+    background: #b1d9ff;
+}
+
+button.cie-btn[data-cie-edit-resources], button.cie-btn[data-cie-back-planning]{
+    background: white;
+    color: black;
+    border: 1px solid lightgray;
+    font-size:12px;
+}
+button.cie-btn[data-cie-edit-resources]:hover, button.cie-btn[data-cie-back-planning]:hover  {
+    background:lightgray;
+    color:black;
+}
+
+table.cie-resource-table tbody>tr:nth-child(odd)>td, table.cie-resource-table tbody>tr:nth-child(odd)>th {
+    background-color:white;
+}
+
+.cie-resource-table th, .cie-resource-table td {
+    padding: 9px 10px;
+    text-align: left;
+    vertical-align: middle;
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+}
+tr:hover {
+    background-color: white !important;
+}
+
+table {
+    margin-block-end: 0px !important;
+  }
+
+fieldset.cie-step-card[data-cie-resource-section="equipment"] {
+    margin-top: 32px;
+}
